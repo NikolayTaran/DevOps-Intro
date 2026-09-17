@@ -5,7 +5,7 @@
 **Branch:** `feature/lab3`
 **Path chosen: GitHub Actions**
 **Green run:** https://github.com/NikolayTaran/DevOps-Intro/actions/runs/35165902196
-**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/1574 — *(fill in the course-repo PR number right after you open it, then commit "docs(lab3): add PR link" and push)*
+**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/1574
 **PR (my fork — where the gate actually runs):** https://github.com/NikolayTaran/DevOps-Intro/pull/1
 
 **Chosen path: GitHub Actions.** I can sign in to github.com, my fork already lives there with SSH signing set up in Lab 1, and my fork's `main` already carries an active ruleset from the Lab 1 bonus — the natural place to bolt a PR gate onto. The internal GitLab (`gitlab.pg.innopolis.university`) remains a fallback for access problems, not the default.
