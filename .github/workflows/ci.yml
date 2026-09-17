@@ -11,8 +11,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GOTOOLCHAIN: local
+  GOFLAGS: -buildvcs=false
 
 jobs:
   vet:
@@ -63,7 +68,6 @@ jobs:
         with:
           version: v2.5.0
           working-directory: app
-          skip-cache: true
 
   ci-ok:
     if: always()
