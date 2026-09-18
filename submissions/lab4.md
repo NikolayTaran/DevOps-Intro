@@ -366,7 +366,6 @@ The kill happens in the **ClientHello** — the very first message, before any s
 submissions/
 ├── lab4.md                # this report
 ├── lab4-trace.txt         # the decoded capture of the traced POST /notes (full dump)
-├── lab4-README.md         # lab overview
 └── screenshots/           # lab4-00 … lab4-19, embedded above
 ```
 
