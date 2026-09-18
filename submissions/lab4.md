@@ -4,7 +4,7 @@
 **Fork:** https://github.com/NikolayTaran/DevOps-Intro
 **Branch:** `feature/lab4`
 **Environment:** Windows 11 + WSL2 (Ubuntu, systemd enabled) — the lab's own prerequisite for Windows
-**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/N — *(fill in the course-repo PR number right after you open it, then commit "docs(lab4): add PR link" and push)*
+**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/1595
 
 **Environment: WSL2.** The lab requires `tcpdump` + `ss` on Windows, and the sanctioned way is WSL2 — which I already had (Docker Desktop runs on it). Ubuntu there has its own kernel network stack, its own `lo`, its own ports, so the whole lab honestly lives at L3/L4/L7 inside one Linux host; systemd is enabled in `/etc/wsl.conf`, which makes `systemctl`/`journalctl` real rather than stubs.
 
