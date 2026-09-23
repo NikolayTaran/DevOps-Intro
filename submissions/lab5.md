@@ -4,7 +4,7 @@
 **Fork:** https://github.com/NikolayTaran/DevOps-Intro
 **Branch:** `feature/lab5`
 **PR (course repo):** TBD — link added after the PR is opened
-**Host:** Windows 11 · VirtualBox 7.1.x · Vagrant 2.4.x · **Hyper-V hypervisor disabled** (`bcdedit /set hypervisorlaunchtype off` + reboot)
+**Host:** Windows 11 · VirtualBox 7.1.x · Vagrant 2.4.x · **Hyper-V disabled** (`bcdedit /set hypervisorlaunchtype off` + reboot) — re-enabled once (`bcdedit /set hypervisorlaunchtype auto` + reboot) solely for the Bonus Docker baseline, to be switched back off before Lab 7
 **Box:** `bento/ubuntu-24.04` (Ubuntu 24.04.3 LTS, public bento project)
 **VM profile:** `quicknotes-lab5` — 2 vCPU · 1024 MB RAM · NAT · `127.0.0.1:18080 → guest 8080` · `app/` rsynced to `/home/vagrant/quicknotes`
 
@@ -226,16 +226,94 @@ VirtualBox snapshots are copy-on-write: taking one **freezes the current disk st
 
 ## Bonus — VM vs Container Resource Baseline (2 pts)
 
-*Optional; measurements pending — Docker Desktop requires the Windows hypervisor back on (`bcdedit /set hypervisorlaunchtype auto`), so the container baseline is taken after Task 2. To be filled with real numbers.*
+**Methodology.** Both baselines were taken on the **same laptop on the same day**; the only thing between them is the hypervisor switch the two stacks require on Windows (Hyper-V off for VirtualBox, back on for Docker Desktop) plus one reboot — no hardware, load or config changes. Both sides are *idle* numbers: the VM was measured right after a plain `vagrant up` (provisioner skipped, QuickNotes not yet started), the container after it answered `curl` and was itself stopped/started.
+
+### B.1: VM baseline (VirtualBox, Hyper-V off)
+
+```
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>powershell -Command "Measure-Command { vagrant halt }"
+Days              : 0
+Hours             : 0
+Minutes           : 0
+Seconds           : 15
+Milliseconds      : 102
+...
+TotalMilliseconds : 15102,9603          → halt = 15.1 s
+
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>powershell -Command "Measure-Command { vagrant up }"
+Days              : 0
+Hours             : 0
+Minutes           : 0
+Seconds           : 58
+Milliseconds      : 168
+...
+TotalMilliseconds : 58168,708           → cold boot = 58.2 s (no provisioning — skipped as "already provisioned")
+
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>vagrant ssh -c "free -h"
+               total        used        free      shared  buff/cache   available
+Mem:           961Mi       321Mi       551Mi       1.0Mi       229Mi       639Mi
+Swap:          2.9Gi          0B       2.9Gi
+
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>vagrant ssh -c "ps -A --no-headers | wc -l"
+149
+
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>powershell -Command "[math]::Round((Get-ChildItem -Recurse -Force \"$env:USERPROFILE\VirtualBox VMs\quicknotes-lab5\" | Measure-Object Length -Sum).Sum / 1GB, 2)"
+2,9                                     → VM image on disk = 2.9 GB (incl. the clean-lab5 snapshot delta)
+```
+
+### B.2: Container baseline (Docker Desktop, same host)
+
+```
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>docker run -d --name qn-lab5 -p 28080:8080 -v "%cd%\app:/src" -w /src golang:1.24 sh -c "go build -o /tmp/qn && /tmp/qn"
+b6e1146476b0...
+
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>curl.exe -i http://127.0.0.1:28080/health
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Wed, 23 Sep 2026 13:52:19 GMT
+Content-Length: 26
+
+{"notes":4,"status":"ok"}
+
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>docker stop qn-lab5
+qn-lab5
+
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>powershell -Command "Measure-Command { docker start qn-lab5 }"
+Days              : 0
+Hours             : 0
+Minutes           : 0
+Seconds           : 0
+Milliseconds      : 311
+...
+TotalMilliseconds : 311,5454            → cold start = 0.31 s
+
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>docker stats --no-stream
+CONTAINER ID   NAME      CPU %   MEM USAGE / LIMIT    MEM %   NET I/O         BLOCK I/O   PIDS
+b6e1146476b0   qn-lab5   0.00%   8.52MiB / 7.411GiB   0.11%   1.17kB / 126B   0B / 0B     10
+
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>docker top qn-lab5
+UID    PID    PPID   C    STIME   TTY   TIME      CMD
+root   2465   ...    0    13:52   ?     00:00:00  sh -c go build -o /tmp/qn && /tmp/qn
+root   2610   2465   0    13:52   ?     00:00:00  /tmp/qn
+                                          → 2 processes total
+
+C:\Users\Inno\OneDrive\Documents\DevOps-Intro>docker images golang:1.24
+IMAGE        ID            DISK USAGE   CONTENT SIZE
+golang:1.24  d2d2bc1c84f7  1.32GB       335MB
+```
+
+(`PIDS 10` in `docker stats` counts the Go runtime's threads inside the cgroup; the process view in `docker top` shows the 2 actual processes.)
+
+### B.3: The comparison
 
 | Dimension | Vagrant VM | Docker container |
 |---|---:|---:|
-| Cold start | **[TODO]** | **[TODO]** |
-| Idle RAM | **[TODO]** | **[TODO]** |
-| On-disk size | **[TODO]** | **[TODO]** |
-| Process count (guest) | **[TODO]** | **[TODO]** |
+| Cold start | **73.3 s** (15.1 s halt + 58.2 s boot) | **0.31 s** (`docker start`) — two orders of magnitude |
+| Idle RAM | **321 MiB** used of 961 MiB (639 MiB available) | **8.52 MiB** of a 7.41 GiB limit — ~38× lighter |
+| On-disk size | **2.9 GB** (VM folder incl. snapshot delta) | **1.32 GB** image (335 MB compressed content) — ~2.2× |
+| Process count (guest) | **149** | **2** — ~75× fewer |
 
-**[TODO: 4–5 sentence analysis]**
+**Analysis.** The surprise is not that the container is lighter — it is *how categorically* lighter: cold start 0.31 s vs 73.3 s (two orders of magnitude) and idle RAM 8.5 MiB vs 321 MiB (~38×) are not tuning margins but different classes of machines. The mechanism is visible in the last row: the VM spends its 58 seconds booting a guest kernel plus the 149 processes systemd stands up before any application runs, while the container is just 2 user-space processes (`sh` waiting on `/tmp/qn`) sharing the host's already-running kernel — there is simply nothing to boot. Each model owns a different territory: the VM is the right tool when you need a different OS or kernel, hard tenant isolation, or a stable appliance to provision, snapshot and roll back (exactly this lab, and Lab 7's Ansible target), while containers win for dense, stateless, horizontally-scaled services whose instances are disposable. That is the data behind containers winning 2014–2020 for stateless microservices: a ~38× RAM advantage turns a node that fits 3 VMs into one that fits dozens of containers, sub-second starts make autoscaling and rolling deploys effectively instantaneous, and with per-instance cost near zero, 'delete and recreate' (cattle, not pets) becomes the default recovery strategy instead of repair. The one number keeping containers honest is disk — 1.32 GB vs 2.9 GB is only ~2× — but that image is paid once and shared by every container on the host, so the marginal cost of the n+1-th service still tends to zero.
 
 ---
 
@@ -294,3 +372,5 @@ All in `submissions/screenshots/`:
 - `08-broken-go.png` — after wiping the toolchain: `bash: line 1: go: command not found`
 - `09-snapshot-restore-time.png` — `Measure-Command` around the restore: **33.8 s**
 - `10-restored-go.png` — after restore: `go version go1.24.5 linux/amd64` again
+- `11-bonus-vm-baseline.png` — VM baseline: halt 15.1 s, boot 58.2 s, `free -h` (321 Mi used), 149 processes, 2.9 GB on disk
+- `12-bonus-docker-baseline.png` — container baseline: `200 OK` + JSON, start 0.31 s, `docker stats` 8.52 MiB, `docker top` 2 processes, image 1.32 GB
