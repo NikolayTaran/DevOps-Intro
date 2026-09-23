@@ -3,8 +3,8 @@
 **Student:** NikolayTaran (na.taranvrn@gmail.com)
 **Fork:** https://github.com/NikolayTaran/DevOps-Intro
 **Branch:** `feature/lab5`
-**PR (course repo):** TBD — link added after the PR is opened
-**Host:** Windows 11 · VirtualBox 7.1.x · Vagrant 2.4.x · **Hyper-V disabled** (`bcdedit /set hypervisorlaunchtype off` + reboot) — re-enabled once (`bcdedit /set hypervisorlaunchtype auto` + reboot) solely for the Bonus Docker baseline, to be switched back off before Lab 7
+**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/1632
+**Host:** Windows 11 · VirtualBox 7.1.x · Vagrant 2.4.x
 **Box:** `bento/ubuntu-24.04` (Ubuntu 24.04.3 LTS, public bento project)
 **VM profile:** `quicknotes-lab5` — 2 vCPU · 1024 MB RAM · NAT · `127.0.0.1:18080 → guest 8080` · `app/` rsynced to `/home/vagrant/quicknotes`
 
