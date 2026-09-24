@@ -3,7 +3,7 @@
 **Name:** Nikolay Taran
 **Course:** DevOps (inno-devops-labs/DevOps-Intro)
 **Branch:** `feature/lab6`
-**PR (course repo):** TBD — link added after the PR is opened
+**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/1635
 **Date:** 2026-09-24
 
 ---
