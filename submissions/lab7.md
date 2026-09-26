@@ -3,7 +3,7 @@
 **Student:** NikolayTaran (na.taranvrn@gmail.com)
 **Fork:** https://github.com/NikolayTaran/DevOps-Intro
 **Branch:** `feature/lab7`
-**PR (course repo):** TBD — link added after the PR is opened
+**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/1678
 **Host:** Windows 11 · VirtualBox 7.1.x · Vagrant 2.4.x
 **VM:** the Lab 5 machine `quicknotes-lab5` — `bento/ubuntu-24.04` (Ubuntu 24.04.3), NAT, `127.0.0.1:18080 → guest 8080`
 **Controller:** Ansible 9.2.0 / ansible-core 2.16.3, running on the VM itself (why: §2.0)
