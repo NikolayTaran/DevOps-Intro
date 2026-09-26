@@ -18,7 +18,7 @@
   vars:
     # --- Task 1 / Task 2 knobs: edit these to drive the demos ---
     quicknotes_addr: ":8080"            # Task 2 demo: ":8080" -> ":9090" -> back
-    quicknotes_restart_sec: "5"         # Task 2 demo: --check --diff target (5 -> 3)
+    quicknotes_restart_sec: "3"         # Task 2 demo: --check --diff target (5 -> 3)
     quicknotes_binary: /usr/local/bin/quicknotes
     quicknotes_data_dir: /var/lib/quicknotes
     quicknotes_data_file: /var/lib/quicknotes/notes.json
