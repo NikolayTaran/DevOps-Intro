@@ -25,7 +25,7 @@
     quicknotes_seed_file: /var/lib/quicknotes/seed.json
 
     # --- Bonus: ansible-pull GitOps loop (arm it when you get to the bonus) ---
-    quicknotes_pull_enabled: false
+    quicknotes_pull_enabled: true
     quicknotes_pull_repo: https://github.com/NikolayTaran/DevOps-Intro.git
     quicknotes_pull_branch: feature/lab7
 
