@@ -453,7 +453,7 @@ C:\Users\Inno\OneDrive\Documents\DevOps-Intro>for /l %i in (1,1,30) do @curl -s 
 
 Dashboard (Grafana → folder *QuickNotes* → "QuickNotes - Golden Signals", window Last 30 minutes): the traffic hump at ~16:10 with the HTTP 200 and HTTP 201 lines stacked, the error ratio pinned at **0 %** under the red 5 % line for the whole window, and the Saturation panel showing the live step **4 → 35** (4 seeded + 1 probe + 30 `lab8-*` notes) exactly when the POSTs land:
 
-![Golden Signals dashboard after ~200 mixed requests — Traffic hump with HTTP 200 + 201 lines, Errors 0 % under the red 5 % line, Saturation stepping 4 → 35 at ~16:10](screenshots/lab8-6.png)
+![Golden Signals dashboard after ~200 mixed requests — Traffic hump with HTTP 200 + 201 lines, Errors 0 % under the red 5 % line, Saturation stepping 4 → 35 at ~16:10](screenshots/lab8.png)
 
 ---
 
@@ -708,7 +708,7 @@ The instructive part is *inside* the agreement: during both pink spikes the inte
 
 ## 5. Conclusion
 
-1. **Golden Signals dashboard — provisioned, not imported (Task 1).** Pinned `prom/prometheus:v3.13.4` + `grafana/grafana:13.2.3` joined the 7-day-old Lab 6 stack without restarting it; `scrape_interval: 15s`, one job, target `quicknotes:8080` via Compose DNS (container port, not the host mapping). Proven by a silent `config --quiet`, 3/3 healthy with the `depends_on: service_healthy` ordering visible in the `up` log, `up == 1`, and Grafana `/api/search` returning the folder and dashboard created purely from mounted files. ~200 mixed requests drove all four panels non-trivial (fig. lab8-6) — with the latency panel implemented as a rate proxy because the app ships no histogram.
+1. **Golden Signals dashboard — provisioned, not imported (Task 1).** Pinned `prom/prometheus:v3.13.4` + `grafana/grafana:13.2.3` joined the 7-day-old Lab 6 stack without restarting it; `scrape_interval: 15s`, one job, target `quicknotes:8080` via Compose DNS (container port, not the host mapping). Proven by a silent `config --quiet`, 3/3 healthy with the `depends_on: service_healthy` ordering visible in the `up` log, `up == 1`, and Grafana `/api/search` returning the folder and dashboard created purely from mounted files. ~200 mixed requests drove all four panels non-trivial (fig. lab8) — with the latency panel implemented as a rate proxy because the app ships no histogram.
 2. **One good alert — demonstrated in the wild (Task 2).** `HighErrorRate` is a symptom alert: (4xx+5xx)/total over 5 m > 5 %, `for: 5m`, `severity: page`, runbook annotation. The deliberate trigger walked the full lifecycle — INACTIVE → PENDING (`Value 0.186`, i.e. 18.6 %) → FIRING (`Value 0.840`, 84 %) → self-resolution once the generator stopped — and the measured PENDING→FIRING gap (4 m 52 s) matches the configured `for: 5m` to within seconds (fig. lab8-2, lab8-3).
 3. **A real blind spot, found empirically.** `GET /boom-test` answers HTTP 404, yet the `code="404"` counter never moves: unregistered paths bypass the per-route instrumentation middleware. The monitoring homework found a monitoring gap in its own target — the strongest argument for measuring the instrumentation itself.
 4. **External monitoring (Bonus).** The ISP blocks both Cloudflare Tunnel (UDP/TCP 7844) and ngrok (selective 443 filtering), so the public entry point is a reverse SSH tunnel to localhost.run. Checkly `notes-api-health` ran 1/min from Frankfurt + N. Virginia for 30+ minutes with status-code **and** body-content asserts: Availability 100 %, P50 738 ms, P95 1.23 s, Retry ratio 6.67 %, zero failure alerts — and two tunnel re-dials that internal monitoring never saw (fig. lab8-5).
@@ -728,7 +728,7 @@ The instructive part is *inside* the agreement: during both pink spikes the inte
 | `monitoring/grafana/provisioning/dashboards/golden-signals.json` | The four golden-signal panels (spec 1.1 layout) |
 | `docs/runbook/high-error-rate.md` | The 3 AM runbook |
 | `submissions/lab8.md` | This report |
-| `submissions/screenshots/lab8-1.png` … `lab8-6.png` | Report figures: alert INACTIVE / PENDING / FIRING, Golden Signals dashboards (traffic + incident), Checkly results |
+| `submissions/screenshots/lab8.png` … `lab8-5.png` | Report figures: Golden Signals dashboards (traffic + incident), alert INACTIVE / PENDING / FIRING, Checkly results |
 
 ## Appendix B — Evidence index
 
@@ -738,7 +738,7 @@ The instructive part is *inside* the agreement: during both pink spikes the inte
 | Baseline `/health` + `/metrics` (7 requests, all 200) | §0 |
 | `docker compose config --quiet` + `docker compose up -d` + `ps` (healthy) | §2.6 |
 | Prometheus `/-/ready`, `up == 1`, Grafana `/api/health` + provisioned dashboard | §2.6 |
-| ~200 mixed requests → non-trivial graphs (dashboard) | §2.6, fig. lab8-6 |
+| ~200 mixed requests → non-trivial graphs (dashboard) | §2.6, fig. lab8 |
 | `docker compose config` shows rule file loaded; `/api/v1/rules` | §3.1 |
 | Trigger loop → PENDING → FIRING (`/api/v1/alerts`) | §3.3 |
 | Alert lifecycle screenshots: INACTIVE / PENDING (0.186) / FIRING (0.840) | §3.3, fig. lab8-1 / lab8-2 / lab8-3 |
