@@ -3,7 +3,7 @@
 **Student:** NikolayTaran (na.taranvrn@gmail.com)
 **Fork:** https://github.com/NikolayTaran/DevOps-Intro
 **Branch:** `feature/lab8` (cut from `feature/lab6` — see §0)
-**PR (course repo):** TBD — link added after the PR is opened
+**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/1705
 **Host:** Windows 11 · Docker Desktop 4.91.0 (engine 29.8.0, containerd image store) — Compose stack runs on the host
 **Base:** Lab 6 stack (`quicknotes:lab6`, distroless, hardened, healthcheck, named volume)
 **Date:** 2026-09-26
