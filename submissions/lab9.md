@@ -1,120 +1,116 @@
-# Lab 9 — DevSecOps: Trivy + ZAP + govulncheck
+# Lab 9 — DevSecOps: Scan QuickNotes with Trivy + ZAP
 
-QuickNotes (Go notes API) scanned with **Trivy 0.59.1** (image / fs / config / CycloneDX SBOM),
-**OWASP ZAP 2.16.0 baseline** (passive only), plus a **`govulncheck` PR-blocking gate** added to the
-Lab 3 CI workflow. Every HIGH/CRITICAL finding is dispositioned below; one class of findings is
-fixed in code (security-headers middleware), and the govulncheck gate is demonstrated catching a
-deliberately introduced vulnerable dependency (red → revert → green).
-
-- **Course PR:** inno-devops-labs/DevOps-Intro#1733 (`feature/lab9` → `main`)
-- **Demo PR (CI runs):** NikolayTaran/DevOps-Intro#3 — the course repo's Actions do not execute
-  for fork PRs (every student PR shows "Workflow runs completed with no jobs"), so the CI gate is
-  demonstrated on the same workflow / same commits in the fork.
-- **Artifacts:** [`submissions/lab9-artifacts/`](lab9-artifacts/) — raw scan outputs, ZAP before/after
-  reports, ZAP run config, CycloneDX SBOM.
+**Student:** NikolayTaran (na.taranvrn@gmail.com)
+**Fork:** https://github.com/NikolayTaran/DevOps-Intro
+**Branch:** `feature/lab9` (cut from `feature/lab8` — carries the Lab 6 hardened image and the Lab 8 monitoring stack)
+**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/1733
+**Host:** Windows 11 · Docker Desktop — every scanner runs on the host through its pinned container image
+**Base:** `quicknotes:lab6` (multi-stage build, distroless static nonroot, healthcheck subcommand — Lab 6)
+**Tools (pinned, never `:latest`):** Trivy `0.59.1` · ZAP `2.16.0` · govulncheck `v1.1.4` · golangci-lint `v2.5.0`
+**Date:** 2026-10-06
 
 ---
 
-## Task 1 — Trivy: image / fs / config / SBOM (6 pts)
+## 1. What the lab requires
 
-### 1.1 Scans run
+| # | Requirement | Where |
+|---|-------------|-------|
+| T1.1 | Four scans — image, filesystem, config, SBOM — Trivy pinned | §2.1–§2.6 |
+| T1.2 | Every HIGH/CRITICAL triaged: FIX / ACCEPT / WATCH / FALSE POSITIVE | §2.5 |
+| T1.3 | Design questions a–d | §2.7 |
+| T2.1 | ZAP baseline, passive only, pinned, reports saved | §3.1 |
+| T2.2 | Every ZAP finding triaged | §3.2 |
+| T2.3 | ≥ 1 finding fixed in code: middleware, all routes, guarded by a test | §3.3 |
+| T2.4 | Re-scan proves the finding is gone | §3.4 |
+| T2.5 | Design questions e–g | §3.5 |
+| B.1–B.2 | govulncheck as a CI PR gate + red→green demonstration | §4.1–§4.3 |
+| B.3 | Design questions h–j | §4.4 |
 
-Trivy is pinned to `aquasec/trivy:0.59.1` (never `:latest`). Vuln scans use `--severity HIGH,CRITICAL`.
+All scan artifacts live in `submissions/lab9-artifacts/`, screenshots in `submissions/screenshots/`.
 
-| # | Scan | Command (abbreviated) | Raw output |
-|---|------|----------------------|------------|
-| 1 | Image (first pass, before fixes) | `docker run --rm aquasec/trivy:0.59.1 image --severity HIGH,CRITICAL quicknotes:lab6` | [trivy-image.txt](lab9-artifacts/trivy-image.txt) |
-| 2 | Image (after builder bump + demo pin) | same, re-run against the rebuilt image | [trivy-image-after.txt](lab9-artifacts/trivy-image-after.txt) |
-| 3 | Image (final, after revert) | same, re-run against the final rebuilt image | [trivy-image-final.txt](lab9-artifacts/trivy-image-final.txt) |
-| 4 | Filesystem (repo) | `docker run --rm -v %cd%:/ws aquasec/trivy:0.59.1 fs --severity HIGH,CRITICAL /ws` | [trivy-fs.txt](lab9-artifacts/trivy-fs.txt) |
-| 5 | Config / misconfig | `docker run --rm -v %cd%:/ws aquasec/trivy:0.59.1 config /ws` | [trivy-config.txt](lab9-artifacts/trivy-config.txt) |
-| 6 | SBOM (CycloneDX 1.6) | `docker run --rm aquasec/trivy:0.59.1 image --format cyclonedx quicknotes:lab6` | [sbom-quicknotes.cdx.json](lab9-artifacts/sbom-quicknotes.cdx.json) |
+---
 
-### 1.2 Triage — every HIGH/CRITICAL dispositioned
+## 2. Task 1 — Trivy: image + filesystem + config + SBOM
 
-#### A. Image scan, first pass (`trivy-image.txt`)
+### 2.1 Tool pinning and scan chronology
 
-OS layer (debian 12.15): **0 HIGH / 0 CRITICAL** — nothing to triage.
-Go binary (`gobinary`): **19 HIGH**, all in the Go **standard library v1.24.13** that the builder
-image `golang:1.24-alpine` baked into the binary:
+All four scans ran through the pinned container `aquasec/trivy:0.59.1` (Docker socket / repo root mounted into the container — never `:latest`):
 
-| # | CVE (stdlib v1.24.13) | Area | Fixed in | Disposition |
-|---|----------------------|------|----------|-------------|
-| 1 | CVE-2026-25679 | net/url | 1.25.8 / 1.26.1 | **FIX** |
-| 2 | CVE-2026-27145 | crypto/x509 | 1.25.11 / 1.26.4 | **FIX** |
-| 3 | CVE-2026-32280 | crypto/x509, crypto/tls | 1.25.9 / 1.26.2 | **FIX** |
-| 4 | CVE-2026-32281 | crypto/x509 | — (1.26.x) | **FIX** |
-| 5 | CVE-2026-32283 | crypto/tls | — (1.26.x) | **FIX** |
-| 6 | CVE-2026-33811 | net | 1.25.10 / 1.26.3 | **FIX** |
-| 7 | CVE-2026-33814 | net/http/internal/http2 | 1.26.x | **FIX** |
-| 8 | CVE-2026-33818 | encoding/asn1 | 1.25.13 / 1.26.6 | **FIX** |
-| 9 | CVE-2026-39820 | net/mail | 1.25.10 / 1.26.3 | **FIX** |
-| 10 | CVE-2026-39821 | net/http, x/net/idna | 1.25.13 / 1.26.6 | **FIX** |
-| 11 | CVE-2026-39822 | os.Root | 1.25.12 / 1.26.5 | **FIX** |
-| 12 | CVE-2026-39836 | net | 1.25.10 / 1.26.3 | **FIX** |
-| 13 | CVE-2026-42499 | net/mail | — (1.26.x) | **FIX** |
-| 14 | CVE-2026-42504 | mime | 1.25.11 / 1.26.4 | **FIX** |
-| 15 | CVE-2026-56853 | net/http | 1.25.13 / 1.26.6 | **FIX** |
-| 16 | CVE-2026-56858 | html/template | — (1.26.x) | **FIX** |
-| 17 | CVE-2026-56859 | encoding/xml | — (1.26.x) | **FIX** |
-| 18 | CVE-2026-56860 | net/url | — (1.26.x) | **FIX** |
-| 19 | CVE-2026-56862 | crypto/tls | — (1.26.x) | **FIX** |
+```
+trivy image --severity HIGH,CRITICAL quicknotes:lab6
+trivy fs    --severity HIGH,CRITICAL .
+trivy config app
+trivy image --format cyclonedx --output sbom-quicknotes.cdx.json quicknotes:lab6
+```
 
-**FIX (all 19):** bump the builder stage `golang:1.24-alpine` → `golang:1.26-alpine` in
-`app/Dockerfile` (commit `c90b6adf4d` — same commit that lands the Task 2 middleware, so the
-rebuilt image ships both a patched stdlib and the security headers). The re-scan confirms it: the
-`stdlib` section is gone entirely in `trivy-image-after.txt`. Since every finding was fixed with a
-one-line base-image bump, none required per-CVE ACCEPT paperwork.
+The artifacts tell a before → fix → after story, so their chronology matters:
 
-#### B. Image re-scan + filesystem scan (`trivy-image-after.txt`, `trivy-fs.txt`)
+1. `trivy-image.txt` — the image **as Lab 8 shipped it** (builder `golang:1.24-alpine` → binary stdlib Go 1.24.13).
+2. **FIX 1** — `app/Dockerfile`: builder bumped `golang:1.24-alpine` → `golang:1.26-alpine`.
+3. `trivy-image-after.txt`, `trivy-fs.txt`, `trivy-config.txt`, `sbom-quicknotes.cdx.json` — re-scan at the mid-demo point (the deliberate, temporary `golang.org/x/net v0.30.0` demo pin of §4.2 is still in `go.mod`).
+4. **FIX 2** — revert of the demo pin (§4.3).
+5. `trivy-image-final.txt` — the final image: **Total: 0 (HIGH: 0, CRITICAL: 0)**.
 
-The rebuild for the Bonus CI demo happened while the **temporary** demo dependency
-`golang.org/x/net v0.30.0` was pinned (commit `bebfec045b`, `app/vuln-demo.go` — see Bonus
-section). Both scans then report the same **6 HIGH**, all in `golang.org/x/net`:
+### 2.2 Image scan — before (trivy-image.txt)
 
-| # | CVE | Component | Fixed in | Disposition | Evidence |
-|---|-----|-----------|----------|-------------|----------|
-| 1 | CVE-2024-45338 | x/net/html | 0.33.0 | **FIX** — demo dep reverted | commit `7d0451f63a` |
-| 2 | CVE-2026-25681 | x/net/html | 0.55.0 | **FIX** — demo dep reverted | commit `7d0451f63a` |
-| 3 | CVE-2026-27136 | x/net/html | none released yet | **WATCH** — see note | — |
-| 4 | CVE-2026-33814 | x/net (http2) | 0.53.0 | **FIX** — demo dep reverted | commit `7d0451f63a` |
-| 5 | CVE-2026-39821 | x/net/idna | 0.55.0 | **FIX** — demo dep reverted | commit `7d0451f63a` |
-| 6 | CVE-2026-46600 | x/net/dns/dnsmessage | 0.56.0 | **FIX** — demo dep reverted | commit `7d0451f63a` |
+```
+quicknotes:lab6 (debian 12.15)
+==============================
+Total: 0 (HIGH: 0, CRITICAL: 0)
 
-- **FIX ×5:** the dependency existed only for the bonus demo (a temporary `countLinks` helper that
-  parses HTML). The revert commit `7d0451f63a` removes the demo files and drops the module via
-  `go mod tidy` — the findings disappear from both the module graph and the rebuilt image.
-- **WATCH (CVE-2026-27136):** no fixed upstream version exists yet, so there is nothing to bump
-  *to*. The practical exposure was already eliminated by removing the module itself. Watch item:
-  re-check the x/net release notes if/when the module is ever re-introduced. Re-evaluation date:
-  **2026-12-06** (≤ 6 months).
+quicknotes (gobinary)
+=====================
+Total: 19 (HIGH: 19, CRITICAL: 0)
 
-#### C. Secrets check inside the fs scan (`trivy-fs.txt`)
+│ stdlib │ CVE-2026-25679 │ HIGH │ fixed │ v1.24.13 │ 1.25.8, 1.26.1 │ net/url: Incorrect parsing of IPv6 host literals …
+```
 
-| Finding | Severity | Disposition |
-|---------|----------|-------------|
-| `.vagrant/machines/default/virtualbox/private_key` — Asymmetric Private Key | HIGH | **FALSE POSITIVE** |
+19 HIGH findings, **all in the Go 1.24.13 standard library** (mostly DoS-class parser bugs: net/url, crypto/x509, crypto/tls, net/http, mime, net/mail). The distroless OS layer (debian 12.15) is clean: **0**. Full table: `submissions/lab9-artifacts/trivy-image.txt`.
 
-Reason: Vagrant auto-generates this per-machine SSH key as *local machine state* for the Lab 5 VM.
-It is not version-controlled — the file does not exist anywhere in the pushed tree (verified against
-the branch), so no secret ships in the repository. Trivy `fs` simply walked the local working
-directory where Vagrant keeps it.
+### 2.3 Filesystem scan (trivy-fs.txt)
 
-#### D. Config scan (`trivy-config.txt`)
+```
+app/go.mod (gomod)
+==================
+Total: 6 (HIGH: 6, CRITICAL: 0)
 
-28 misconfig checks across Dockerfile/compose: **0 HIGH / 0 CRITICAL**. One LOW
-(AVD-DS-0026 — "Add HEALTHCHECK instruction"): below this lab's severity bar; noted as a future
-hardening item, since the app already exposes `/health` for the compose stack to probe.
+│ golang.org/x/net │ CVE-2024-45338 │ HIGH │ fixed │ v0.30.0 │ 0.33.0 │ golang.org/x/net/html: Non-linear parsing of case-insensitive content …
 
-#### E. Post-fix verification (final image)
+.vagrant/machines/default/virtualbox/private_key (secrets)
+==========================================================
+Total: 1 (HIGH: 1, CRITICAL: 0)
 
-`trivy image --severity HIGH,CRITICAL quicknotes:lab6` on the final image (demo dep reverted,
-builder on 1.26): **0 HIGH / 0 CRITICAL** — [trivy-image-final.txt](lab9-artifacts/trivy-image-final.txt).
+HIGH: AsymmetricPrivateKey (private-key)
+```
 
-### 1.3 CycloneDX SBOM
+Two finding classes: the same 6 `x/net` CVEs the image scan sees (module level, straight from `go.mod`) and one "secret". Full output: `submissions/lab9-artifacts/trivy-fs.txt`.
 
-Generated from the image with Trivy 0.59.1, spec CycloneDX 1.6 — full file:
-[sbom-quicknotes.cdx.json](lab9-artifacts/sbom-quicknotes.cdx.json). First 30 lines:
+### 2.4 Config (misconfig) scan (trivy-config.txt)
+
+```
+app/Dockerfile (dockerfile)
+===========================
+Tests: 28 (SUCCESSES: 27, FAILURES: 1)
+Failures: 1 (UNKNOWN: 0, LOW: 1, MEDIUM: 0, HIGH: 0, CRITICAL: 0)
+
+AVD-DS-0026 (LOW): Add HEALTHCHECK instruction in your Dockerfile
+```
+
+### 2.5 Triage — every HIGH/CRITICAL has a disposition
+
+**Dependency/container findings (image + fs scans):**
+
+| Findings | Where | Severity | Disposition | Action and evidence |
+|---|---|---|---|---|
+| 19 × stdlib Go 1.24.13: CVE-2026-25679, -27145, -32280, -32281, -32283, -33811, -33814, -33818, -39820, -39821, -39822, -39836, -42499, -42504, -56853, -56858, -56859, -56860, -56862 | image scan (gobinary) | 19 HIGH | **FIX** | Builder image bumped `golang:1.24-alpine` → `golang:1.26-alpine` in `app/Dockerfile` (this PR). Verified: the stdlib section of the after-scan is empty (`trivy-image-after.txt`) |
+| 6 × golang.org/x/net v0.30.0: CVE-2024-45338 (GO-2024-3333), CVE-2026-25681, CVE-2026-27136, CVE-2026-33814, CVE-2026-39821, CVE-2026-46600 | image scan (gobinary) + fs scan (gomod) | 6 HIGH | **FIX** | The pin was temporary (the bonus demo, §4.2). Fix commit `fix(security): drop temporary vuln-dep pin (golang.org/x/net v0.30.0, GO-2024-3333)` deletes `vuln-demo.go` / `vuln-reach.go` and runs `go mod tidy`, so the module leaves `go.mod` entirely. Verified: `trivy-image-final.txt` → Total: 0 (HIGH: 0, CRITICAL: 0) |
+| `AsymmetricPrivateKey` in `.vagrant/machines/default/virtualbox/private_key` | fs scan (secrets) | 1 HIGH | **FALSE POSITIVE** | Vagrant's auto-generated default key of the local lab VM. `.vagrant/` is a runtime directory — ignored and **not tracked by git** (`git ls-files .vagrant` is empty) — so the repository ships no credential. The finding disappears once the lab VM is destroyed |
+
+CVE-2024-45338 deserves a note: it is simultaneously a module-level Trivy finding (above) and the *reachable* govulncheck finding demonstrated in §4.2 — the same CVE, two scanners, two different questions.
+
+**Config scan:** no HIGH/CRITICAL → nothing in the required triage scope. The single LOW is documented anyway: **AVD-DS-0026 (add HEALTHCHECK) — ACCEPT.** The healthcheck exists, but lives in `compose.yaml`: it calls the app's own `healthcheck` subcommand, because distroless has no shell for a classic curl-based check. Keeping it in the deployment unit avoids duplicating it in the image; re-evaluate if the image is ever distributed standalone (next image change).
+
+### 2.6 SBOM (first 30 lines of sbom-quicknotes.cdx.json)
 
 ```json
 {
@@ -151,178 +147,234 @@ Generated from the image with Trivy 0.59.1, spec CycloneDX 1.6 — full file:
         },
 ```
 
-The SBOM enumerates every component of `quicknotes:lab6` (OS packages + Go modules) with purl
-identifiers and exact versions, signed by the image digest — a machine-readable inventory of what
-actually ships.
+CycloneDX 1.6, generated by Trivy 0.59.1 against the mid-demo image — deliberately captured while the temporary `x/net v0.30.0` pin was still in place, so the component list contains exactly the component §2.5 removes; the final image's SBOM differs only by the absence of that component. This is the Log4Shell workflow of design question (d): "are we affected by CVE-X?" is answered by grepping one committed file, not by rebuilding the world.
 
-### 1.4 Design questions
+### 2.7 Design questions a–d
 
-**a) Severity is one input, not the answer.** What else matters when triaging?
-- *Reachability* — is the vulnerable function actually called? (This lab: 19 stdlib CVEs vs. 6
-  module CVEs that govulncheck proved reachable — see Bonus. Trivy flags module presence;
-  govulncheck proves call-graph reachability.)
-- *Exploit availability* — is there a public exploit / is it in CISA KEV?
-- *Deployment context* — internet-facing vs internal, auth in front, data sensitivity, blast radius.
-- *Fix cost & compensating controls* — a one-line base-image bump (here) vs. a breaking major
-  upgrade; WAF/rate-limiting as temporary mitigation.
-- *Exposure of the vulnerable path* — a CVE in `crypto/x509` chain building matters more for a
-  TLS server than for a CLI tool that never parses untrusted certs.
+**a) CVE severity is one input, not the answer — what else matters?**
+Severity is a population-level label; triage is instance-level. What actually moves the decision: **reachability** (does our call graph touch the vulnerable function? — the whole premise of govulncheck, §4), **exposure** (internet-facing vs internal-only, authenticated vs anonymous), **exploit maturity** (public exploit / CISA KEV / EPSS score vs a theoretical bug), **impact context** (which data sits behind the component, blast radius), and **fix economics** (is the patched version one `docker build` away, or a risky major upgrade?). A CRITICAL in an unreachable internal parser can rank below a MEDIUM in the internet-facing request path.
 
-**b) Why is the minimal base the strongest single security control?**
-The debian 12.15 layer produced **0 HIGH/CRITICAL** while the same image carried 19 HIGH findings
-in the Go binary itself. A minimal/distroless base removes the shell, package manager and the
-entire apt package set — i.e. it deletes whole *classes* of findings before any scanner runs. Fewer
-components = fewer CVEs to triage forever, smaller patch surface, and nothing for an attacker to
-pivot through (no shell, no curl) in case of RCE.
+**b) Why is the minimal distroless base the strongest single security control?**
+Because it removes entire vulnerability *classes* instead of patching instances. No shell, no package manager, no libc, no utilities → the OS package inventory is tiny (this lab: debian 12.15 → **0** OS findings), so there is almost nothing for the scanner — or an attacker — to work with. Post-exploitation is crippled: an RCE in the app still lands in an environment with no shell to spawn and no tooling to download. It also cuts noise: every package you don't ship is a CVE you will never have to triage.
 
 **c) When is `.trivyignore` the right move, and when is it security theater?**
-Right: a documented, dated, owner-attributed acceptance for a *specific* finding (false positive
-with reasoning, or ACCEPT with a re-evaluation date), reviewed in the PR like any code change.
-Theater: a dumping ground — suppressing findings silently to get a green pipeline, without
-disposition/owner/date, or ignoring whole scanners/dirs. The ignore-file must stay as auditable as
-the findings it hides; otherwise it just moves the risk out of sight.
+Right: a specific, documented, dated acceptance — e.g. a CVE with no upstream fix in a component you cannot yet replace, reviewed and re-checked on a date. Theater: blanket-suppressing findings to keep the pipeline green without a written reason and an expiry; suppressing whole *classes* of checks (say, all secret scanning) because they are annoying; or ignoring files wholesale. An ignore entry without a documented disposition is how a real finding becomes invisible.
 
 **d) What concrete future problem does the SBOM solve today?**
-Log4Shell-style response: the day CVE-20XX-XXXX drops for component Y, you answer "are we
-affected?" in minutes by grepping a machine-readable inventory (purls + versions + image digests)
-instead of rebuilding and re-scanning every artifact. It also gives you an audit trail per release
-and a diffable component manifest between image versions.
+Log4Shell: on day zero you must answer "do we ship the affected component, in which version, where?" — with an SBOM that is a `grep` over one JSON file (seconds); without one it is a fire drill across every repo and image. It also scopes incident response (exact affected builds via the image digest + component list), feeds license/compliance audits, and gives the team a factual inventory. This lab's SBOM is a working example: the `x/net v0.30.0` component is right there in the list.
 
 ---
 
-## Task 2 — OWASP ZAP baseline + fix in code (4 pts)
+## 3. Task 2 — ZAP baseline + fix in code
 
-### 2.1 Baseline run
+### 3.1 Running the baseline (passive only)
 
-- Pinned image `ghcr.io/zaproxy/zaproxy:2.16.0`, run via `zap-baseline.py` — **passive scan only,
-  no active scan** — against the running Lab 6 stack, target `http://host.docker.internal:8080`.
-- Reports: [zap-before.html](lab9-artifacts/zap-before.html) /
-  [zap-before.json](lab9-artifacts/zap-before.json); run config auto-generated by the script:
-  [zap.yaml](lab9-artifacts/zap.yaml).
+ZAP `2.16.0` (pinned image `ghcr.io/zaproxy/zaproxy:2.16.0`), driven by the committed Automation Framework plan `submissions/lab9-artifacts/zap.yaml`: context targets `http://host.docker.internal:8080/health` and `/`, spider (maxDuration 1), passive scan, then report generation. The plan has **no active-scan job** — passive-only, exactly as the lab demands (baseline, never `zap-full-scan.py`). Reports: `zap-before.html/json`; the same plan, re-run with `zap-after.*` filenames against the rebuilt image, produced the after evidence.
 
-### 2.2 Triage — every finding (before)
+Before-scan result (valid baseline against the Lab 8 image — no security headers yet):
 
-| ID | Alert | Risk | Affected URL(s) | Disposition |
-|----|-------|------|-----------------|-------------|
-| 10021 | X-Content-Type-Options Header Missing | Low | GET `/health` | **FIX** — middleware (below) |
-| 90004 | Insufficient Site Isolation Against Spectre Vulnerability (no `Cross-Origin-Resource-Policy`) | Low | GET `/health` | **FIX** — middleware (below) |
-| 10049 | Storable and Cacheable Content | Informational | `/`, `/health`, `/robots.txt`, `/sitemap.xml` (4 instances) | **FIX (mitigate)** — `Cache-Control: no-store` |
-| 10116 | ZAP is Out of Date | Low | `/` — the *scanner itself* (pinned 2.16.0 vs latest 2.17.0) | **ACCEPT** — scanner noise, not an app property; version is pinned deliberately for reproducible scans. Re-evaluate: **2026-12-06** (bump the ZAP tag next lab cycle) |
+| Rule | Alert | Risk | URL(s) |
+|---|---|---|---|
+| 10021 | X-Content-Type-Options Header Missing | Low (Medium) | /health |
+| 90004 | Insufficient Site Isolation Against Spectre Vulnerability | Low (Medium) | /health |
+| 10116 | ZAP is Out of Date | Low (High) | / |
+| 10049 | Storable and Cacheable Content | Informational (Medium) | /, /health, /robots.txt, /sitemap.xml |
 
-### 2.3 The fix — middleware, all routes, guarded by tests (commit `c90b6adf4d`)
+FAIL: 0 · WARN: 3 rules · PASS: 63
 
-- **`app/security.go`** — `securityHeaders` middleware setting six headers on *every* response:
-  `Content-Security-Policy: default-src 'none'`, `X-Content-Type-Options: nosniff`,
-  `X-Frame-Options: DENY`, `Cross-Origin-Resource-Policy: same-origin`,
-  `Cache-Control: no-store`, `Referrer-Policy: no-referrer`.
-- **Wired at the router edge** in `main.go` (`Handler: securityHeaders(server.Routes())`) — applies
-  to all routes and even mux-generated 404s, not just `/health` (requirement 2.3.1–2.3.2).
-- **`app/security_test.go`** — asserts all six headers on `GET /health`, `GET /metrics`,
-  `GET /notes`, `POST /notes`, `GET/DELETE /notes/999` **and** on the mux 404 `/no-such-route`
-  (requirement 2.3.3). The test calls `securityHeaders(...)` directly, so deleting the middleware
-  breaks the build — the fix is genuinely guarded, not a comment (requirement 2.3.4).
+### 3.2 ZAP triage
 
-### 2.4 Re-scan — the findings are gone
+| ID | Alert | Risk | URL | Disposition | Reason |
+|---|---|---|---|---|---|
+| 10021 | X-Content-Type-Options Header Missing | Low | /health | **FIX** | One middleware header: `X-Content-Type-Options: nosniff` — browsers must not MIME-sniff a JSON API's responses away from the declared Content-Type |
+| 90004 | Insufficient Site Isolation Against Spectre Vulnerability | Low | /health | **FIX** | `Cross-Origin-Resource-Policy: same-origin` — a same-origin API's responses are nobody else's embeddable resource |
+| 10049 | Storable and Cacheable Content | Informational | /, /health, /robots.txt, /sitemap.xml | **FIX** | Note payloads are per-user state; `Cache-Control: no-store` in the middleware. The after-scan reclassifies this alert as *Non-Storable Content* |
+| 10116 | ZAP is Out of Date | Low | / | **FALSE POSITIVE** | Not a property of the app — the scanner announcing its own plugin updates. The ZAP version is *deliberately* pinned (2.16.0) for reproducible scans; the notice is re-checked whenever the pin is bumped |
 
-After rebuilding the image and re-running the same baseline:
-[zap-after.html](lab9-artifacts/zap-after.html) / [zap-after.json](lab9-artifacts/zap-after.json).
+### 3.3 The fix — one middleware, all routes, guarded by a test
 
-| ID | Before | After |
-|----|--------|-------|
-| 10021 X-Content-Type-Options Missing | Low, 1 instance | **gone** |
-| 90004 Spectre Site Isolation | Low, 1 instance | **gone** |
-| 10049 | "Storable and Cacheable Content" (4 instances) | now "Non-Storable Content", informational, **evidence: `no-store`** — ZAP literally observes the new header; confirms the mitigation instead of flagging a gap |
-| 10116 ZAP Out of Date | Low | unchanged (accepted scanner noise) |
+`app/security.go` (new file):
 
-Net effect: every application-level WARN from the baseline is eliminated; passive rules passing
-went from 63 to 65.
+```go
+package main
 
-### 2.5 Design questions
+import "net/http"
+
+// securityHeaders is the middleware that stamps EVERY response with the
+// static security headers ZAP expects from a pure JSON API (Lab 9, §2.3).
+//
+// One wrapper around the whole router — wired in main.go as
+// Handler: securityHeaders(server.Routes()) — instead of Header().Set
+// calls sprinkled across handlers, so no route (including mux-generated
+// 404/405 responses) can ever ship without them.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		// An API serves no scripts/styles/images — the strictest possible
+		// CSP: nothing may load from anywhere (ZAP 10038-class finding).
+		h.Set("Content-Security-Policy", "default-src 'none'")
+		// Stop browsers MIME-sniffing responses away from the declared
+		// Content-Type (ZAP 10021: X-Content-Type-Options Header Missing).
+		h.Set("X-Content-Type-Options", "nosniff")
+		// The API is never a frame target (ZAP 10020-class finding).
+		h.Set("X-Frame-Options", "DENY")
+		// Same-origin API: responses are not embeddable cross-origin —
+		// site-isolation hardening (ZAP 90004 finding).
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		// Note payloads are per-user state, never cacheable
+		// (ZAP 10049: Storable and Cacheable Content).
+		h.Set("Cache-Control", "no-store")
+		// Mozilla web-security guideline: don't leak referring URLs.
+		h.Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
+}
+```
+
+Wired in `app/main.go` — one line around the whole router:
+
+```go
+srv := &http.Server{
+	Addr:              addr,
+	Handler:           securityHeaders(server.Routes()),
+	ReadHeaderTimeout: 5 * time.Second,
+}
+```
+
+`app/security_test.go` (new file) asserts all six headers on every registered route (`/health`, `/metrics`, `/notes` GET+POST, `/notes/999` GET+DELETE) **and** on the mux-generated 404 — the fix must apply to all routes, not just `/health` (spec 2.3.2). The test builds the same chain as `main.go` (`securityHeaders(NewServer(store).Routes())` over an in-memory store), so deleting the middleware breaks the build outright, and dropping any single header fails the matching assertions — the fix is genuinely guarded by a test, not "a comment" (spec 2.3.4).
+
+### 3.4 Re-scan — the findings are gone
+
+After rebuilding the image and re-running the same passive plan:
+
+| Rule | Before | After |
+|---|---|---|
+| 10021 X-Content-Type-Options Header Missing | Low, 1 instance | **gone** |
+| 90004 Insufficient Site Isolation Against Spectre | Low, 1 instance | **gone** |
+| 10049 Storable and Cacheable Content | Info, 4 instances | **Non-Storable Content**, 3 instances — the caching finding is resolved by `Cache-Control: no-store` |
+| 10116 ZAP is Out of Date | Low, 1 instance | unchanged (triaged FALSE POSITIVE above) |
+
+PASS 63 → 65: the two fixed rules flipped to PASS. Full reports: `submissions/lab9-artifacts/zap-after.html/json`.
+
+### 3.5 Design questions e–g
 
 **e) Why a middleware and not per-handler header sets?**
-One enforcement point at the router edge cannot drift: new handlers get the headers for free,
-error paths and mux-404s (which no one "remembers" to touch) are covered, and there is exactly one
-place to unit-test. Per-handler `Header().Set` calls guarantee omissions — one new endpoint or one
-error branch and the protection silently disappears.
+One enforcement point vs N opportunities to forget. Headers are a *transport-level* property of every response, so they belong at the transport layer: wrap the router once and even mux-generated 404/405 responses — which belong to no handler of ours — ship stamped. It is testable in one place, new routes inherit the policy automatically, and no handler can silently drift from it.
 
-**f) `Content-Security-Policy: default-src 'none'` — what does it break, and why is it OK here?**
-It blocks every subresource and inline execution: scripts, styles, images, fonts, fetch/XHR, frames.
-Any site serving HTML/JS/CSS breaks immediately. QuickNotes is a JSON API that serves no browser
-assets — there is nothing to break, and as a bonus, if someone ever *does* accidentally render
-attacker-controlled HTML, the strict CSP keeps injected scripts dead. A real website would need an
-allowlist (`script-src 'self'`, etc.) instead of the nuclear default.
+**f) What does `Content-Security-Policy: default-src 'none'` break, and why is it OK here?**
+It forbids the page from loading *anything*: no scripts, styles, images, fonts, frames, no inline content, no connections. Any real website breaks instantly (CSS gone, JS gone). QuickNotes is a pure JSON API — there is nothing to render, so the strictest possible CSP costs nothing and makes any response inert if someone opens it in a browser. A website (or a future Swagger UI) needs an explicit allowlist of what it actually loads.
 
-**g) What's the cost of marking informational findings "accepted" without reading them?**
-Alert fatigue. Blanket-accepting noise trains the team to ignore ZAP output entirely — and the day
-a real Medium-severity finding hides between twelve accepted noise rows, it ships to production
-behind a "green" report. Informational does not mean worthless: 10049 was informational, and acting
-on it (no-store) still removed a real cache-leak class. Every finding gets read and dispositioned;
-"accept" is a decision, not a default.
+**g) What is the cost of marking all informational findings "accepted" without reading them?**
+Alert fatigue, then blindness. If every informational flag is accepted unread, the queue stops being read at all — and the one informational alert that was actually a canary (an open redirect, a verbose stack trace, odd caching behavior) drowns in noise. Blanket acceptance also normalizes suppression over fixing, which is exactly the DevSecOps theater this lab warns about. Reading costs minutes; the habit is what you are buying.
 
 ---
 
-## Bonus — govulncheck as a CI PR gate (2 pts)
+## 4. Bonus — govulncheck as a CI PR gate
 
-### B.1–B.2 Implementation (`.github/workflows/ci.yml`, commit `6aa6260bda`)
+### 4.1 The job
 
-- New **`govulncheck`** job: `working-directory: app`, installs
-  `golang.org/x/vuln/cmd/govulncheck@v1.1.4` (**pinned**, never `@latest`), runs `govulncheck ./...`.
-- Toolchain: vet/test/govulncheck run on Go **1.26** — the same toolchain the Dockerfile builds
-  with (`go.mod` language version stays 1.24). The lint job pins Go 1.24 because golangci-lint
-  v2.5.0 is built with Go 1.25 and panics type-checking a 1.26 toolchain — documented inline in the
-  workflow.
-- Aggregate **`ci-ok`** job (`needs: [vet, test, lint, govulncheck]`, `if: always()`) fails the PR
-  when any gate fails — the check that "blocks the PR" (requirement B.2.4).
-- Lab 3 discipline kept: runner pinned `ubuntu-24.04`, every third-party action pinned to a full
-  commit SHA, least-privilege `permissions: contents: read`.
+`.github/workflows/ci.yml` extends the Lab 3 gate (vet / test / lint) with a reachability-aware vulnerability job; the `ci-ok` aggregate job keeps the discipline "any failing job blocks the PR". Lab 3 rules preserved: runner pinned `ubuntu-24.04`, every action pinned to a full commit SHA (`actions/checkout@11bd7190…` v4.2.2, `actions/setup-go@0aaccfd1…` v5.4.0, `golangci/golangci-lint-action@14814048…` v7.0.0), least-privilege `permissions: contents: read`.
 
-### B.2.5 Demonstration — the gate catches a bad dependency
+```yaml
+  # Lab 9 Bonus: govulncheck — pinned scanner version, never @latest.
+  govulncheck:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version: '1.26'
+          cache: true
+          cache-dependency-path: app/go.mod
+      - name: Install govulncheck (pinned v1.1.4)
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      - run: govulncheck ./...
 
-Demo PR: NikolayTaran/DevOps-Intro#3 (same workflow, same commits; the course repo's Actions do
-not run for fork PRs).
+  # Aggregate gate: the PR is green only when every job above is green.
+  ci-ok:
+    if: always()
+    needs: [vet, test, lint, govulncheck]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: All gates green
+        run: |
+          test "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "false"
+```
 
-1. **Introduce:** temporary pin `golang.org/x/net v0.30.0` (commit `bebfec045b`) with
-   `app/vuln-demo.go` calling `html.Parse`; commit `6fc5831114` makes the call reachable from an
-   `init()` entry point.
-2. **RED:** [run 37496080060](https://github.com/NikolayTaran/DevOps-Intro/actions/runs/37496080060)
-   — `govulncheck` fails with **exit code 3**, reporting symbol-level findings
-   (GO-2026-5030, GO-2026-5029, GO-2026-5028, …) each traced as
-   `quicknotes.countLinks calls html.Parse` at `vuln-demo.go:16:27`; `ci-ok` fails; vet/test/lint
-   stay green. Screenshot: ![red run](screenshots/lab9-1.png)
-3. **Revert:** commit `7d0451f63a` removes the demo files and drops the dependency (`go mod tidy`).
-4. **GREEN:** [run 37496505239](https://github.com/NikolayTaran/DevOps-Intro/actions/runs/37496505239)
-   — all five jobs pass, `ci-ok` 2s. Screenshot: ![green run](screenshots/lab9-2.png)
+Two deliberate deviations from the lab-3-era baseline, both documented in the workflow itself:
 
-### B.3 Design questions
+- vet / test / govulncheck run on Go **1.26**, matching the Dockerfile builder bumped in §2.5. The assignment's "1.24" described the lab-3 CI of its time; the underlying principle — one Go version across CI and the shipped image — is preserved.
+- **lint** runs on Go **1.24**: golangci-lint v2.5.0 is built with Go 1.25 and panics type-checking Go 1.26 files (`file requires newer Go version go1.26 (application built with go1.25)`). This surfaced during the first push of the demo below and is fixed by the `ci(lint): pin Go 1.24 for golangci-lint v2.5.0 (built with go1.25)` commit, so the lint gate stays green until a golangci-lint build compiled with Go 1.26 ships.
 
-**h) How is "module has a CVE but we don't call the affected function" different — and what does
-that mean for triage workload?**
-govulncheck's call-graph analysis separates *imported* from *reachable*: a vulnerability whose
-affected symbols are never called is reported as informational and does not fail the gate; a
-reachable one fails the PR. Triage workload collapses from "disposition every CVE in every
-transitive module" (Trivy's module-level view) to "disposition only the handful the scanner proves
-runnable from our code" — the analysis runs automatically on every PR instead of by hand.
+### 4.2 Red — the gate catches a reachable CVE
 
-**i) Why pin the scanner version, not just `@latest`?**
-A gate must mean the same thing every run: with `@latest`, a tool update can silently change
-findings and turn green pipelines red (or hide regressions) with no code change — a gate that
-moves under you trains the team to ignore it. Pinning gives a controlled upgrade path (read the
-release notes, re-triage, bump deliberately) and supply-chain hygiene: the scanner is third-party
-code you execute against your source on every commit.
+To prove the gate can actually fail (B.2.5), a known-vulnerable dependency was introduced deliberately:
 
-**j) What does govulncheck NOT catch that Trivy's image scan would?**
-govulncheck only sees Go modules in the build graph. It is blind to: OS packages in the base image
-(debian layer), non-Go binaries and static assets, Dockerfile/compose misconfigurations, embedded
-secrets, and anything in the runtime image that did not come from `go.mod`. That is exactly
-Trivy's breadth (image/fs/config/secrets). The two are complementary: Trivy = artifact-level
-coverage, govulncheck = Go call-graph depth — which is why this repo ships both.
+- `go.mod`: pin `golang.org/x/net v0.30.0` — affected by **GO-2024-3333 / CVE-2024-45338** (non-linear parsing in `x/net/html`, fixed in v0.33.0).
+- `app/vuln-demo.go`: `countLinks()` actually calls `html.Parse`.
+- `app/vuln-reach.go`: `func init() { _, _ = countLinks("<a></a>") }` — an entry point reaches the vulnerable symbol, so govulncheck's call-graph analysis reports the CVE as **reachable**, not merely present.
+
+Commit: `security(demo): make x/net html.Parse reachable (GO-2024-3333)`.
+
+Where the demo ran: the course repo does not execute Actions for student PRs, so the demonstration lives in the fork — PR https://github.com/NikolayTaran/DevOps-Intro/pull/3 (`NikolayTaran:main` ← `feature/lab9`), same workflow file, same code.
+
+The run went red exactly as designed: govulncheck exits 3 and names the call path — `quicknotes.countLinks` calls `html.Parse` (GO-2024-3333).
+
+Red run: https://github.com/NikolayTaran/DevOps-Intro/actions/runs/37496080060
+
+![red run — govulncheck job failing on the reachable GO-2024-3333](screenshots/lab9-1.png)
+
+### 4.3 Green — revert, and every gate passes
+
+The fix removes the demo entirely: `git rm app/vuln-demo.go app/vuln-reach.go`, then `go mod tidy` — `x/net` leaves `go.mod`, since the module was only ever needed by the demo. Commit: `fix(security): drop temporary vuln-dep pin (golang.org/x/net v0.30.0, GO-2024-3333)`.
+
+The same revert is what turned Trivy's image scan clean in §2.5 — Trivy flags module *presence*, govulncheck flags *reachability*; here both pointed at the same fix.
+
+Green run — all five jobs (vet 24s · test 31s · lint 33s · govulncheck 32s · ci-ok 2s):
+https://github.com/NikolayTaran/DevOps-Intro/actions/runs/37496505239
+
+![green run — all five jobs passing after the revert](screenshots/lab9-2.png)
+
+The final image re-scan after the revert (`trivy-image-final.txt`):
+
+```
+quicknotes:lab6 (debian 12.15)
+==============================
+Total: 0 (HIGH: 0, CRITICAL: 0)
+```
+
+### 4.4 Design questions h–j
+
+**h) "This module has a CVE but we don't call the affected function" vs "this module has a CVE" — and what does that mean for triage workload?**
+Presence means *possible* exposure; reachability means *actual* exposure through our code. A module-level finding can often be WATCHed (upgrade when convenient); a reachable one demands a FIX now, because the vulnerable code executes on paths we ship. Reachability is what keeps triage scalable: of a page of module-level CVEs, only the handful the call graph actually touches need a decision today — the rest become scheduled maintenance, not incidents.
+
+**i) Why pin the version of the scanner, not just `@latest`?**
+Because a gate must be reproducible and boring. `@latest` means the checker itself changes under you: new rules can flip a green PR red (or a red one green) with no code change, two runs of the same commit can disagree, and a bad upstream release becomes your outage. A pinned version makes findings comparable over time, keeps CI deterministic, and keeps the supply chain auditable — the scanner gets upgraded the same way as anything else: deliberately, with the diff reviewed. Same reasoning as the pinned Trivy/ZAP container images.
+
+**j) What will govulncheck NOT catch that Trivy's image scan would?**
+Everything that is not a Go module: the **OS packages of the base image** (debian 12.15 — Trivy's bread and butter), non-Go binaries shipped in the image, **secrets** (Trivy flagged the Vagrant key in §2.3), and **misconfigurations** (Dockerfile/compose checks — §2.4). govulncheck sees only the Go dependency graph of `app/`. The two tools are complements, not alternatives: Trivy asks "what is in the artifact", govulncheck asks "which of it actually executes".
 
 ---
 
-## Result summary
+## 5. Deliverables and conclusion
 
-| Task | Points | Status |
-|------|-------:|--------|
-| Trivy image/fs/config/SBOM + per-finding triage | 6 | 19 stdlib HIGH **FIX**ed (builder bump), 5 x/net HIGH **FIX**ed (revert), 1 **WATCH**, 1 secret **FALSE POSITIVE**; final image 0 HIGH/CRITICAL |
-| ZAP baseline + fix in code + re-scan | 4 | 10021 + 90004 eliminated, 10049 mitigated (`no-store`), 10116 accepted; fix = middleware on all routes + guarded tests |
-| govulncheck PR gate | +2 | Pinned v1.1.4 in CI behind `ci-ok`; red run caught the demo dep (`countLinks calls html.Parse`), revert → green |
+| Artifact | Path |
+|---|---|
+| Trivy image scan (before) | `submissions/lab9-artifacts/trivy-image.txt` |
+| Trivy image scan (after builder bump) | `submissions/lab9-artifacts/trivy-image-after.txt` |
+| Trivy image scan (final, post-revert) | `submissions/lab9-artifacts/trivy-image-final.txt` |
+| Trivy filesystem scan | `submissions/lab9-artifacts/trivy-fs.txt` |
+| Trivy config scan | `submissions/lab9-artifacts/trivy-config.txt` |
+| CycloneDX SBOM | `submissions/lab9-artifacts/sbom-quicknotes.cdx.json` |
+| ZAP before / after (HTML + JSON) | `submissions/lab9-artifacts/zap-before.*`, `zap-after.*` |
+| ZAP Automation Framework plan | `submissions/lab9-artifacts/zap.yaml` |
+| Red / green run screenshots | `submissions/screenshots/lab9-1.png`, `lab9-2.png` |
+| Security fix | `app/security.go`, `app/security_test.go`, wiring in `app/main.go` |
+| CI gate | `.github/workflows/ci.yml` |
+
+Conclusion: QuickNotes now ships with a hardened-by-default HTTP surface (six security headers on every response, guarded by tests and proven by a before/after ZAP delta), a clean container (0 HIGH/CRITICAL by Trivy, after two documented fixes), a committed SBOM for the next Log4Shell, and a CI pipeline where a reachable CVE blocks the PR — demonstrated red, then green.
