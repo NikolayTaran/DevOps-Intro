@@ -1,0 +1,51 @@
+
+app/go.mod (gomod)
+==================
+Total: 6 (HIGH: 6, CRITICAL: 0)
+
+┌──────────────────┬────────────────┬──────────┬────────┬───────────────────┬───────────────┬──────────────────────────────────────────────────────────────┐
+│     Library      │ Vulnerability  │ Severity │ Status │ Installed Version │ Fixed Version │                            Title                             │
+├──────────────────┼────────────────┼──────────┼────────┼───────────────────┼───────────────┼──────────────────────────────────────────────────────────────┤
+│ golang.org/x/net │ CVE-2024-45338 │ HIGH     │ fixed  │ v0.30.0           │ 0.33.0        │ golang.org/x/net/html: Non-linear parsing of                 │
+│                  │                │          │        │                   │               │ case-insensitive content in golang.org/x/net/html            │
+│                  │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2024-45338                   │
+│                  ├────────────────┤          │        │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-25681 │          │        │                   │ 0.55.0        │ golang.org/x/net/html: golang.org/x/net/html: Arbitrary code │
+│                  │                │          │        │                   │               │ execution via Cross-Site Scripting                           │
+│                  │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-25681                   │
+│                  ├────────────────┤          │        │                   │               ├──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-27136 │          │        │                   │               │ golang.org/x/net/html: golang: golang.org/x/net/html:        │
+│                  │                │          │        │                   │               │ Cross-Site Scripting via HTML parsing bypass                 │
+│                  │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-27136                   │
+│                  ├────────────────┤          │        │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-33814 │          │        │                   │ 0.53.0        │ net/http/internal/http2: golang: golang.org/x/net: Go        │
+│                  │                │          │        │                   │               │ HTTP/2: Denial of Service via malformed                      │
+│                  │                │          │        │                   │               │ SETTINGS_MAX_FRAME_SIZE frame...                             │
+│                  │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-33814                   │
+│                  ├────────────────┤          │        │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-39821 │          │        │                   │ 0.55.0        │ golang.org/x/net/idna: golang: net/http:                     │
+│                  │                │          │        │                   │               │ golang.org/x/net/idna: Privilege escalation via incorrect    │
+│                  │                │          │        │                   │               │ Punycode label processing                                    │
+│                  │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-39821                   │
+│                  ├────────────────┤          │        │                   ├───────────────┼──────────────────────────────────────────────────────────────┤
+│                  │ CVE-2026-46600 │          │        │                   │ 0.56.0        │ golang.org/x/net/dns/dnsmessage:                             │
+│                  │                │          │        │                   │               │ golang.org/x/net/dns/dnsmessage: Denial of Service via       │
+│                  │                │          │        │                   │               │ invalid DNS record parsing                                   │
+│                  │                │          │        │                   │               │ https://avd.aquasec.com/nvd/cve-2026-46600                   │
+└──────────────────┴────────────────┴──────────┴────────┴───────────────────┴───────────────┴──────────────────────────────────────────────────────────────┘
+
+.vagrant/machines/default/virtualbox/private_key (secrets)
+==========================================================
+Total: 1 (HIGH: 1, CRITICAL: 0)
+
+HIGH: AsymmetricPrivateKey (private-key)
+════════════════════════════════════════
+Asymmetric Private Key
+────────────────────────────────────────
+ .vagrant/machines/default/virtualbox/private_key:1
+────────────────────────────────────────
+   1 [ BEGIN OPENSSH PRIVATE KEY-----*******************************************************************************************************************************************************************************************************************************************************************************************************************************************-----END OPENSSH PRI
+   2   
+────────────────────────────────────────
+
+
