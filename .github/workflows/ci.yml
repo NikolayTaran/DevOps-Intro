@@ -94,4 +94,10 @@ jobs:
 
   # Aggregate gate: the PR is green only when every job above is green.
   ci-ok:
-    if:
+    if: always()
+    needs: [vet, test, lint, govulncheck]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: All gates green
+        run: |
+          test "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "false"
