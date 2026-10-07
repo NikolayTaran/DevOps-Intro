@@ -1,0 +1,99 @@
+# Lab 10 - release pipeline: a tag push (v*) builds the Lab 6 distroless
+# QuickNotes image once, pushes it to ghcr.io and (optionally) asks Render
+# to redeploy through its deploy hook.
+#
+# Lab 3 SS1.1 discipline kept:
+#   - runner pinned to ubuntu-24.04 (not ubuntu-latest)
+#   - every third-party action pinned to a full 40-char commit SHA
+#   - least-privilege permissions: contents: read + packages: write only
+#     (packages: write is the minimum that can publish to ghcr.io)
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # ghcr.io only accepts lowercase image paths, so GITHUB_REPOSITORY
+  # must be lowercased before it reaches the registry.
+  IMAGE_NAME: quicknotes
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-24.04
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+
+      - name: Compute image name and tags
+        id: meta
+        run: |
+          OWNER_REPO=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
+          VERSION="${GITHUB_REF_NAME}"
+          IMAGE="ghcr.io/${OWNER_REPO}/${IMAGE_NAME}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            echo "${IMAGE}:${VERSION}"
+            echo "${IMAGE}:latest"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Will push: ${IMAGE}:${VERSION} and :latest"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push (linux/amd64)
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Task 2.1.6: after the push, poke the Render deploy hook so a new tag
+      # redeploys the service. The hook URL lives in a GitHub Actions secret
+      # and is never committed. When the secret is unset (e.g. the Codespaces
+      # fallback is used instead of Render) the step exits 0 and the release
+      # still succeeds.
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          IMG: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RENDER_DEPLOY_HOOK}" ]; then
+            echo "RENDER_DEPLOY_HOOK not set - skipping Render redeploy"
+            exit 0
+          fi
+          # Only the tag may differ from the image the service was created
+          # with, and imgURL must be URL-encoded (%2F for /, %3A for :).
+          ENCODED=$(python3 -c "import urllib.parse, os; print(urllib.parse.quote(os.environ['IMG'], safe=''))")
+          case "${RENDER_DEPLOY_HOOK}" in
+            *\?*) URL="${RENDER_DEPLOY_HOOK}&imgURL=${ENCODED}" ;;
+            *)    URL="${RENDER_DEPLOY_HOOK}?imgURL=${ENCODED}" ;;
+          esac
+          echo "Calling Render deploy hook for ${IMG}"
+          curl -fsS -X GET "$URL"
+          echo "Render deploy triggered."
