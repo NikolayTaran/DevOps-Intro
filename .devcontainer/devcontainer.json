@@ -1,0 +1,16 @@
+{
+  "name": "QuickNotes Lab 10 (Codespaces Option B)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "QuickNotes",
+      "onAutoForward": "notify"
+    }
+  },
+  "postStartCommand": "docker pull ghcr.io/nikolaytaran/devops-intro/quicknotes:v0.1.0 && docker rm -f quicknotes 2>/dev/null; docker run -d --name quicknotes -p 8080:8080 -e ADDR=:8080 -e PORT=8080 ghcr.io/nikolaytaran/devops-intro/quicknotes:v0.1.0",
+  "remoteUser": "vscode"
+}
