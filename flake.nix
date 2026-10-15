@@ -55,23 +55,25 @@
           tag = "lab11";
 
           # Root filesystem: the Task 1 binary (dereferenced from the store
-          # symlink so the layer carries a real file) and the seed notes.
-          # /data is deliberately NOT shipped: the layer's `/` is owned by
-          # 65532 (see uid/gid below) and mode 0775, so the app's
-          # `ensureSeeded` MkdirAll("/data", 0755) succeeds on first boot —
-          # the same outcome as Lab 6's chown'd /data, minus any root step
-          # (nix store paths are canonicalised read-only, so a writable
-          # pre-baked /data is impossible without runAsRoot's VM anyway).
+          # symlink so the layer carries a real file), the seed notes, and a
+          # pre-baked empty /data. At runtime Docker roots the container at a
+          # root-owned `/` (the layer's `.` entry is skipped when the layer is
+          # applied, and the overlayfs upper dir masks it), so a nonroot
+          # process cannot mkdir at `/` — `/data` must ship in the layer.
+          # tar --owner/--group (uid/gid below) rewrites it to 65532 with mode
+          # 0755, so the app can write DATA_PATH there — Lab 6's nonroot
+          # discipline, with no runAsRoot VM.
           copyToRoot = pkgs.runCommand "quicknotes-rootfs" { } ''
             mkdir -p $out/bin
             cp -L ${quicknotes}/bin/quicknotes $out/bin/quicknotes
             cp ${./app/seed.json} $out/seed.json
           '';
 
-          # Same nonroot discipline as Lab 6's distroless image: every file in
-          # the layer (incl. `/` itself) is owned by UID/GID 65532 —
-          # distroless's `nonroot` — so the runtime user owns the rootfs and
-          # nothing in the image is root-owned. No runAsRoot VM involved.
+          # Every file and directory in the layer tar is owned by UID/GID
+          # 65532 — distroless's `nonroot` — so the app owns everything it
+          # needs to touch (the runtime `/` itself is root-owned by Docker's
+          # layer application; that is why `/data` ships pre-baked above).
+          # No runAsRoot VM involved.
           uid = 65532;
           gid = 65532;
 
