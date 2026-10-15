@@ -1,0 +1,99 @@
+# Lab 11 bonus — reproducibility gate: two independent CI environments must
+# produce identical OCI image digests, a third job fails the workflow if not.
+#
+# Lab 3 discipline kept:
+#   - runner pinned to ubuntu-24.04
+#   - every third-party action pinned to a full 40-char commit SHA
+#   - least-privilege permissions (contents: read is enough here)
+name: nix-repro
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      break_repro:
+        description: "Deliberately diverge job A (red demo)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  repro-a:
+    runs-on: ubuntu-24.04
+    outputs:
+      digest: ${{ steps.hash.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
+
+      # Red demo: a timestamp leak. Job A flips the fixed `created` field in
+      # flake.nix, so its tarball gets a different digest than job B's.
+      # Triggered either via workflow_dispatch (break_repro=true) or by simply
+      # pushing the same branch to feature/lab11-break.
+      - name: Deliberately break reproducibility (red demo only)
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.break_repro) || github.ref == 'refs/heads/feature/lab11-break' }}
+        run: |
+          sed -i 's/1970-01-01T00:00:01Z/2099-01-01T00:00:00Z/' flake.nix
+          echo "Patched created= timestamp in job A — divergence expected"
+
+      - name: nix build .#docker
+        run: nix build .#docker --print-build-logs
+
+      - name: Digest
+        id: hash
+        run: |
+          DIGEST=$(sha256sum "$(readlink -f result)" | awk '{print $1}')
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "repro-a digest=${DIGEST}"
+
+  repro-b:
+    runs-on: ubuntu-24.04
+    outputs:
+      digest: ${{ steps.hash.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
+
+      - name: nix build .#docker
+        run: nix build .#docker --print-build-logs
+
+      - name: Digest
+        id: hash
+        run: |
+          DIGEST=$(sha256sum "$(readlink -f result)" | awk '{print $1}')
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "repro-b digest=${DIGEST}"
+
+  compare:
+    needs: [repro-a, repro-b]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Assert identical digests
+        env:
+          A: ${{ needs.repro-a.outputs.digest }}
+          B: ${{ needs.repro-b.outputs.digest }}
+        run: |
+          echo "repro-a=${A}"
+          echo "repro-b=${B}"
+          if [ -z "${A}" ] || [ -z "${B}" ]; then
+            echo "missing digest output(s)"
+            exit 1
+          fi
+          if [ "${A}" != "${B}" ]; then
+            echo "DIGEST MISMATCH — reproducibility gate failed"
+            exit 1
+          fi
+          echo "Digests match — reproducible."
