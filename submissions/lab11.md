@@ -4,9 +4,9 @@
 **Fork:** https://github.com/NikolayTaran/DevOps-Intro
 **Branch:** `feature/lab11` (cut from `feature/lab10`)
 **Image:** `quicknotes:lab11` — deterministic OCI tarball built by Nix only (no Docker daemon), sha256 `a881fddd52454637d9cf1c7c306a411abb55da1f9942cd96df7daec10653f2ed`, image ID `sha256:3b83c49af873875ccac9e55687a23e5a16f25c5faad69a7220a1cfd11631b7dd`
-**Green run (final, after the /data fix):** FILL-AFTER-FIX-PUSH — both jobs must print `a881fddd…`
+**Green run (final, after the /data fix):** https://github.com/NikolayTaran/DevOps-Intro/actions/runs/38821967429
 **Red run (deliberate divergence):** https://github.com/NikolayTaran/DevOps-Intro/actions/runs/38783606441 — gate failed as designed (`0446cff3…` ≠ `e7fe10dd…`, pre-/data-fix flake)
-**PR (course repo):** FILL-AFTER-PR-CREATED
+**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/1796
 
 > **Where the gate runs.** `nix-repro.yml` triggers on every push (any branch) and every pull request. The runs cited below are pushes to `feature/lab11` in my fork: two *fresh GitHub-hosted runners* build `.#docker` independently and a third job fails the workflow if the two SHA-256 digests differ. The course-repo PR carries the flake + this report; the fork branch pushes are where the reproducibility gate is actually exercised.
 
