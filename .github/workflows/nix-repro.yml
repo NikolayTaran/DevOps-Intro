@@ -1,99 +1,112 @@
-# Lab 11 bonus — reproducibility gate: two independent CI environments must
-# produce identical OCI image digests, a third job fails the workflow if not.
-#
-# Lab 3 discipline kept:
-#   - runner pinned to ubuntu-24.04
-#   - every third-party action pinned to a full 40-char commit SHA
-#   - least-privilege permissions (contents: read is enough here)
 name: nix-repro
+
+# Bonus task (Lab 11): prove reproducibility in CI. Two parallel jobs build
+# .#docker on two fresh runners; a third job fails the workflow if the
+# digests differ. Job B also collects the Task 1 evidence (store hash, /health,
+# devShell) so the CI run doubles as the "second independent environment".
 
 on:
   push:
   pull_request:
-  workflow_dispatch:
-    inputs:
-      break_repro:
-        description: "Deliberately diverge job A (red demo)"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
+env:
+  # Flip to "true" to demonstrate that the gate catches divergence (B.3):
+  # job A then builds a deliberately different image (version 0.1.1) and the
+  # verify job goes red. Kept "false" in every normal commit.
+  BREAK_REPRO: "false"
+
 jobs:
-  repro-a:
+  build-a:
+    name: "env A — nix build .#docker"
     runs-on: ubuntu-24.04
     outputs:
-      digest: ${{ steps.hash.outputs.digest }}
+      digest: ${{ steps.digest.outputs.digest }}
     steps:
-      - name: Checkout
+      - name: Checkout (SHA-pinned)
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 1
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
+      - name: Install Nix (SHA-pinned)
+        uses: DeterminateSystems/nix-installer-action@c723f3a885e3f1d866d91f4f0c33dd44b1fc7c60 # v18
 
-      # Red demo: a timestamp leak. Job A flips the fixed `created` field in
-      # flake.nix, so its tarball gets a different digest than job B's.
-      # Triggered either via workflow_dispatch (break_repro=true) or by simply
-      # pushing the same branch to feature/lab11-break.
-      - name: Deliberately break reproducibility (red demo only)
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.break_repro) || github.ref == 'refs/heads/feature/lab11-break' }}
-        run: |
-          sed -i 's/1970-01-01T00:00:01Z/2099-01-01T00:00:00Z/' flake.nix
-          echo "Patched created= timestamp in job A — divergence expected"
+      - name: "[red-run demo only] deliberately break reproducibility in this job"
+        if: env.BREAK_REPRO == 'true'
+        run: sed -i 's/version = "0.1.0"/version = "0.1.1"/' flake.nix
 
-      - name: nix build .#docker
-        run: nix build .#docker --print-build-logs
+      - name: Build the deterministic OCI image
+        run: nix build .#docker
 
-      - name: Digest
-        id: hash
-        run: |
-          DIGEST=$(sha256sum "$(readlink -f result)" | awk '{print $1}')
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "repro-a digest=${DIGEST}"
+      - name: Digest (sha256sum result | awk '{print $1}')
+        id: digest
+        run: echo "digest=$(sha256sum result | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
-  repro-b:
+  build-b:
+    name: "env B — nix build .#docker + Task 1 evidence"
     runs-on: ubuntu-24.04
     outputs:
-      digest: ${{ steps.hash.outputs.digest }}
+      digest: ${{ steps.digest.outputs.digest }}
+      store-hash: ${{ steps.storehash.outputs.store-hash }}
     steps:
-      - name: Checkout
+      - name: Checkout (SHA-pinned)
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 1
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
+      - name: Install Nix (SHA-pinned)
+        uses: DeterminateSystems/nix-installer-action@c723f3a885e3f1d866d91f4f0c33dd44b1fc7c60 # v18
 
-      - name: nix build .#docker
-        run: nix build .#docker --print-build-logs
+      - name: Build the quicknotes binary
+        run: nix build .#quicknotes
 
-      - name: Digest
-        id: hash
+      - name: Store hash of the binary (Task 1, second environment)
+        id: storehash
         run: |
-          DIGEST=$(sha256sum "$(readlink -f result)" | awk '{print $1}')
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "repro-b digest=${DIGEST}"
+          nix-store -q --hash $(readlink -f result) | tee store-hash.txt
+          echo "store-hash=$(cat store-hash.txt)" >> "$GITHUB_OUTPUT"
 
-  compare:
-    needs: [repro-a, repro-b]
+      - name: Run the binary and probe /health
+        run: |
+          ADDR=:8080 DATA_PATH="$RUNNER_TEMP/notes.json" SEED_PATH="$PWD/app/seed.json" \
+            ./result/bin/quicknotes &
+          APP_PID=$!
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8080/health; then break; fi
+            sleep 1
+          done
+          echo
+          curl -sf http://localhost:8080/health || { echo "::error::/health did not answer"; kill $APP_PID; exit 1; }
+          kill $APP_PID
+
+      - name: devShell smoke test (go, gopls, golangci-lint)
+        run: nix develop -c sh -c 'go version && gopls version | head -1 && golangci-lint --version'
+
+      - name: Build the deterministic OCI image
+        run: nix build .#docker
+
+      - name: Digest (sha256sum result | awk '{print $1}')
+        id: digest
+        run: |
+          cp -L result quicknotes-lab11.tar.gz
+          echo "digest=$(sha256sum result | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the image tarball (for local `docker load`)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: quicknotes-lab11-image
+          path: quicknotes-lab11.tar.gz
+          if-no-files-found: error
+
+  verify:
+    name: "digests must match"
+    needs: [build-a, build-b]
     runs-on: ubuntu-24.04
     steps:
-      - name: Assert identical digests
-        env:
-          A: ${{ needs.repro-a.outputs.digest }}
-          B: ${{ needs.repro-b.outputs.digest }}
+      - name: Compare the two digests
         run: |
-          echo "repro-a=${A}"
-          echo "repro-b=${B}"
-          if [ -z "${A}" ] || [ -z "${B}" ]; then
-            echo "missing digest output(s)"
+          echo "env A digest: ${{ needs.build-a.outputs.digest }}"
+          echo "env B digest: ${{ needs.build-b.outputs.digest }}"
+          if [ "${{ needs.build-a.outputs.digest }}" != "${{ needs.build-b.outputs.digest }}" ]; then
+            echo "::error::reproducibility broken: the two independent builds produced different digests"
             exit 1
           fi
-          if [ "${A}" != "${B}" ]; then
-            echo "DIGEST MISMATCH — reproducibility gate failed"
-            exit 1
-          fi
-          echo "Digests match — reproducible."
+          echo "OK: identical digests — build is reproducible"
