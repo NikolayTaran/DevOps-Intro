@@ -14,9 +14,11 @@ permissions:
 
 env:
   # Flip to "true" to demonstrate that the gate catches divergence (B.3):
-  # job A then builds a deliberately different image (version 0.1.1) and the
-  # verify job goes red. Kept "false" in every normal commit.
-  BREAK_REPRO: "false"
+  # job A then pins a non-epoch image `created` timestamp in its own checkout
+  # only (a simulated wall-clock leak into the image config — SOURCE_DATE_EPOCH
+  # class of failure), and the verify job goes red. Kept "false" in every
+  # normal commit.
+  BREAK_REPRO: "true"
 
 jobs:
   build-a:
@@ -33,7 +35,7 @@ jobs:
 
       - name: "[red-run demo only] deliberately break reproducibility in this job"
         if: env.BREAK_REPRO == 'true'
-        run: sed -i 's/version = "0.1.0"/version = "0.1.1"/' flake.nix
+        run: sed -i 's|tag = "lab11";|tag = "lab11"; created = "2026-01-01T00:00:00Z";|' flake.nix
 
       - name: Build the deterministic OCI image
         run: nix build .#docker
