@@ -55,25 +55,34 @@
           tag = "lab11";
 
           # Root filesystem: the Task 1 binary (dereferenced from the store
-          # symlink so the layer carries a real file), the seed notes, and a
-          # pre-baked empty /data. At runtime Docker roots the container at a
-          # root-owned `/` (the layer's `.` entry is skipped when the layer is
-          # applied, and the overlayfs upper dir masks it), so a nonroot
-          # process cannot mkdir at `/` — `/data` must ship in the layer.
-          # tar --owner/--group (uid/gid below) rewrites it to 65532 with mode
-          # 0755, so the app can write DATA_PATH there — Lab 6's nonroot
-          # discipline, with no runAsRoot VM.
+          # symlink so the layer carries a real file) and the seed notes.
           copyToRoot = pkgs.runCommand "quicknotes-rootfs" { } ''
             mkdir -p $out/bin
             cp -L ${quicknotes}/bin/quicknotes $out/bin/quicknotes
             cp ${./app/seed.json} $out/seed.json
           '';
 
-          # Every file and directory in the layer tar is owned by UID/GID
-          # 65532 — distroless's `nonroot` — so the app owns everything it
-          # needs to touch (the runtime `/` itself is root-owned by Docker's
-          # layer application; that is why `/data` ships pre-baked above).
-          # No runAsRoot VM involved.
+          # /data must be baked here, not inside copyToRoot: docker's
+          # unpacker skips the layer's "." entry (moby pkg/archive), so at
+          # runtime "/" comes from the root-owned overlayfs upper dir and a
+          # non-root app cannot MkdirAll("/data") — the first boot dies with
+          # "mkdir /data: permission denied". But store outputs are
+          # canonicalised read-only, so a runCommand-baked /data ships with
+          # mode 0555 and the app then dies on the first write instead
+          # ("open /data/notes.json: permission denied" — verified).
+          # extraCommands runs inside the layer directory, after mkPureLayer's
+          # `chmod ug+w layer`, so a fresh mkdir here yields a writable 0755
+          # dir, and the layer tar forces its owner to uid/gid (65532).
+          # Net effect: /data is unpacked as 65532:65532 0755 — the exact
+          # equivalent of Lab 6's chown'd /data, without any root step.
+          extraCommands = ''
+            mkdir -p data
+          '';
+
+          # Same nonroot discipline as Lab 6's distroless image: every file in
+          # the layer (incl. `/` itself) is owned by UID/GID 65532 —
+          # distroless's `nonroot` — so the runtime user owns the rootfs and
+          # nothing in the image is root-owned. No runAsRoot VM involved.
           uid = 65532;
           gid = 65532;
 

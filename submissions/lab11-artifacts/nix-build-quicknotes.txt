@@ -1,21 +1,20 @@
-warning: Git tree '/home/z/work/repo' is dirty
-checking outputs of '/nix/store/44alq2inldv9pzgd4swgma0j7pima8ry-quicknotes-0.1.0.drv'...
+this derivation will be built:
+  /nix/store/gqbfg61pg2fhay4qvd67cfap0yjjdc1r-quicknotes-0.1.0.drv
+building '/nix/store/gqbfg61pg2fhay4qvd67cfap0yjjdc1r-quicknotes-0.1.0.drv'...
 quicknotes> Running phase: unpackPhase
 quicknotes> unpacking source archive /nix/store/w8y93p1g7pk2dk39yplaww2crwcswb08-app
 quicknotes> source root is app
 quicknotes> Running phase: patchPhase
-quicknotes> Running phase: updateAutotoolsGnuConfigScriptsPhase
+quicknotes> Running phase: updateAutotoolsGnuConfigBitsPhase
 quicknotes> Running phase: configurePhase
 quicknotes> Running phase: buildPhase
 quicknotes> Building subPackage .
-quicknotes> Running phase: checkPhase
-quicknotes> ok          quicknotes      0.006s
 quicknotes> Running phase: installPhase
 quicknotes> Running phase: fixupPhase
-quicknotes> shrinking RPATHs of ELF executables and libraries in /nix/store/6zb9bwvfmyqpdjqy1a57jhnpn3ja302v-quicknotes-0.1.0
-quicknotes> shrinking /nix/store/6zb9bwvfmyqpdjqy1a57jhnpn3ja302v-quicknotes-0.1.0/bin/quicknotes
+quicknotes> shrinking RPATHs of ELF executables and libraries in /nix/store/ah5y0x77x1ja3iwadp0p6m5sb87bg6pm-quicknotes-0.1.0
+quicknotes> shrinking /nix/store/ah5y0x77x1ja3iwadp0p6m5sb87bg6pm-quicknotes-0.1.0/bin/quicknotes
 quicknotes> patchelf: cannot find section '.dynamic'. The input file is most likely statically linked
-quicknotes> checking for references to /tmp/nix-build-quicknotes-0.1.0.drv-1/ in /nix/store/6zb9bwvfmyqpdjqy1a57jhnpn3ja302v-quicknotes-0.1.0...
+quicknotes> checking for references to /nix/var/nix/builds/nix-23440-2998928882/ in /nix/store/ah5y0x77x1ja3iwadp0p6m5sb87bg6pm-quicknotes-0.1.0...
 quicknotes> patchelf: cannot find section '.dynamic'. The input file is most likely statically linked
-quicknotes> patching script interpreter paths in /nix/store/6zb9bwvfmyqpdjqy1a57jhnpn3ja302v-quicknotes-0.1.0
-quicknotes> stripping (with command strip and flags -S -p) in  /nix/store/6zb9bwvfmyqpdjqy1a57jhnpn3ja302v-quicknotes-0.1.0/bin
+quicknotes> patching script interpreter paths in /nix/store/ah5y0x77x1ja3iwadp0p6m5sb87bg6pm-quicknotes-0.1.0
+quicknotes> stripping (with command strip and flags -S -p) in  /nix/store/ah5y0x77x1ja3iwadp0p6m5sb87bg6pm-quicknotes-0.1.0/bin
