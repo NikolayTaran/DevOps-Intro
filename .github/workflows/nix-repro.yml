@@ -18,7 +18,7 @@ env:
   # only (a simulated wall-clock leak into the image config — SOURCE_DATE_EPOCH
   # class of failure), and the verify job goes red. Kept "false" in every
   # normal commit.
-  BREAK_REPRO: "true"
+  BREAK_REPRO: "false"
 
 jobs:
   build-a:
