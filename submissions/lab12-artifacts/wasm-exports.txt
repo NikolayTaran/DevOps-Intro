@@ -1,0 +1,21 @@
+== /home/z/fork12/wasm/main.wasm
+  total exports: 19
+  notable exports: ['memory', 'malloc', 'free', 'calloc', 'realloc', 'fminimum', 'fminimumf', 'fmaximum', 'fmaximumf', '_initialize', 'spin_http_handle_http_request', 'canonical_abi_realloc', 'canonical_abi_free', 'handle-http-request', 'asyncify_start_unwind', 'asyncify_stop_unwind', 'asyncify_start_rewind', 'asyncify_stop_rewind', 'asyncify_get_state']
+  imports (6):
+    wasi_snapshot_preview1.fd_write (func)
+    wasi_snapshot_preview1.clock_time_get (func)
+    wasi_snapshot_preview1.args_sizes_get (func)
+    wasi_snapshot_preview1.args_get (func)
+    wasi_snapshot_preview1.fd_read (func)
+    wasi_snapshot_preview1.random_get (func)
+== /tmp/wasm-ncs/main.wasm
+  total exports: 19
+  notable exports: ['memory', 'malloc', 'free', 'calloc', 'realloc', 'fminimum', 'fminimumf', 'fmaximum', 'fmaximumf', '_start', 'spin_http_handle_http_request', 'canonical_abi_realloc', 'canonical_abi_free', 'handle-http-request', 'asyncify_start_unwind', 'asyncify_stop_unwind', 'asyncify_start_rewind', 'asyncify_stop_rewind', 'asyncify_get_state']
+  imports (7):
+    wasi_snapshot_preview1.fd_write (func)
+    wasi_snapshot_preview1.proc_exit (func)
+    wasi_snapshot_preview1.clock_time_get (func)
+    wasi_snapshot_preview1.args_sizes_get (func)
+    wasi_snapshot_preview1.args_get (func)
+    wasi_snapshot_preview1.fd_read (func)
+    wasi_snapshot_preview1.random_get (func)

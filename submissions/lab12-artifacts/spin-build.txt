@@ -1,0 +1,10 @@
+$ cd wasm && spin build
+Building component moscow-time with `tinygo build -target=wasip1 -buildmode=c-shared -no-debug -o main.wasm .`
+Finished building all Spin components
+
+$ ls -la main.wasm
+-rw-rw-r-- 1 z z 370510 Oct 15 23:40 main.wasm
+
+$ sha256sum main.wasm ../wasm-cli/main.wasm
+abc86045fff250c66673dd0cb4d10dd8e9f94d8a020e73af8a49cb2ac74f14b6  main.wasm
+29547b563a145c0a45b279bc9d17adc91f481cfdcb3979910eb7c5befca3ea3f  ../wasm-cli/main.wasm

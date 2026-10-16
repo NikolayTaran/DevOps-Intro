@@ -6,7 +6,7 @@ spin_manifest_version = 2
 name = "moscow-time"
 version = "0.1.0"
 authors = ["NikolayTaran <na.taranvrn@gmail.com>"]
-description = "Lab 12 - Moscow time JSON endpoint (Spin WASM component)"
+description = ""
 
 [[trigger.http]]
 route = "/time"
@@ -16,5 +16,5 @@ component = "moscow-time"
 source = "main.wasm"
 allowed_outbound_hosts = []
 [component.moscow-time.build]
-command = "go tool componentize-go build"
+command = "tinygo build -target=wasip1 -buildmode=c-shared -no-debug -o main.wasm ."
 watch = ["**/*.go", "go.mod"]

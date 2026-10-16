@@ -1,0 +1,25 @@
+$ spin build   # v1: naive time.LoadLocation("Europe/Moscow") + json.NewEncoder(map[string]any)
+Building component moscow-time with `tinygo build -target=wasip1 -buildmode=c-shared -no-debug -o main.wasm .`
+Finished building all Spin components
+
+$ spin up --listen 127.0.0.1:33000 &
+$ curl -s -w '\nHTTP %{http_code}\n' http://127.0.0.1:33000/time
+tz: unknown time zone Europe/Moscow
+
+HTTP 500
+# -> wasip1 modules have no IANA tz database and TinyGo cannot embed Go's time/tzdata
+#    (design question d). Fix: time.FixedZone("MSK", 3*60*60).
+
+$ # v1b: time.Now().UTC().Add(3*time.Hour) + json.NewEncoder(map[string]any)
+$ curl -s http://127.0.0.1:33000/time
+{"hour_minute":"02:31","iso":"2026-10-16T02:31:51Z","unix":1792117911}
+# -> json reflection itself WORKS on TinyGo 0.41, but the wall clock is labeled "Z" (UTC):
+#    RFC3339 with a UTC-located time prints the wrong zone designator. Fix: FixedZone
+#    prints +03:00; and the final version builds JSON via fmt.Sprintf+%q (lab guideline).
+
+$ # toolchain pinning receipt (before switching to Go 1.26.9):
+$ tinygo build ... (with host Go 1.25.14)
+../../.cache/tinygo/goroot-dc40c8.../src/net/ip.go:17:2: package internal/strconv is not in std
+Error: Build command for component moscow-time failed with status Exited(1)
+# -> TinyGo 0.41's net package targets Go 1.26 (tinygo 0.41.1 fixed 1.25 back-compat,
+#    issue #5332). Pinned the rig to Go 1.26.9 -> clean build.

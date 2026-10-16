@@ -1,3 +1,3 @@
 module github.com/moscow-time-cli
 
-go 1.25
+go 1.22

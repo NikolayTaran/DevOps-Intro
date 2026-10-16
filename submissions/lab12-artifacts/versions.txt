@@ -1,0 +1,17 @@
+$ spin --version
+spin 3.6.3 (88d51cf 2026-04-09)
+
+$ tinygo version
+tinygo version 0.41.0 linux/amd64 (using go version go1.26.9 and LLVM version 20.1.1)
+
+$ go version
+go version go1.26.9 linux/amd64
+
+$ wasmtime --version
+wasmtime-cli 9.0.4
+
+$ hyperfine --version
+hyperfine 2.0.0
+
+$ spin templates list | grep http-go
+| http-go                     HTTP request handler using (Tiny)Go                          |

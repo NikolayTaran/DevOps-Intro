@@ -1,0 +1,17 @@
+$ # design question b experiment: what changes without -buildmode=c-shared?
+$ cd /tmp/wasm-ncs && spin build   # build command: tinygo build -target=wasip1 -no-debug -o main.wasm .
+Building component moscow-time-nocs with `tinygo build -target=wasip1 -no-debug -o main.wasm .`
+Finished building all Spin components
+$ ls -la main.wasm
+-rw-r--r-- 1 z z 370800 Oct 15 23:35 main.wasm
+$ spin up --listen 127.0.0.1:33124 &
+$ curl -s -w '\nHTTP %{http_code}\n' http://127.0.0.1:33124/time
+{"unix":1792107326,"iso":"2026-10-16T02:35:26+03:00","hour_minute":"02:35","timezone":"UTC+3 (Moscow)"}
+HTTP 200
+# On the pinned combo (Spin 3.6.3 + TinyGo 0.41 + SDK v2.2.1) the handler still serves:
+# the SDK exports spin_http_handle_http_request in both modes. The difference is the
+# module SHAPE (see wasm-exports.txt): exe mode adds a _start entry and imports
+# wasi_snapshot_preview1.proc_exit (a CLI program that can end its own process);
+# c-shared mode is a reactor: _initialize, no _start, no proc_exit - a library the
+# host calls into and whose lifecycle the host owns. That is the shape Spin's host
+# ABI is designed for, and what the template pins.

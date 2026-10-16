@@ -1,0 +1,16 @@
+$ # design question h: can the Task 1 component run under bare wasmtime run?
+$ wasmtime run --env REQUEST_METHOD=GET --env PATH_INFO=/time main.wasm
+$ echo $?
+0
+# exit 0, zero bytes of output: nothing ran. The c-shared module has no _start;
+# its handler lives in exported spin_http_handle_http_request, which only a
+# wasi-http host (Spin) calls.
+
+$ wasmtime serve --addr 127.0.0.1:33140 main.wasm
+error: unexpected argument '--addr' found
+USAGE: wasmtime <MODULE>
+$ wasmtime --help | head -12
+    run         Runs a WebAssembly module
+    settings    Displays available Cranelift settings for a target
+    wast        Runs a WebAssembly test script file
+# wasmtime 9.0.4 has no serve subcommand at all: this build cannot host wasi-http.

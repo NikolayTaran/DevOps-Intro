@@ -1,0 +1,30 @@
+$ spin up   (default :3000 taken by another local service; verification port 33123)
+Logging component stdio to ".spin/logs/"
+
+Serving http://127.0.0.1:33123
+Available Routes:
+  moscow-time: http://127.0.0.1:33123/time
+
+$ curl -s -w '\nHTTP %{http_code}\n' http://127.0.0.1:33123/time
+{"unix":1792107654,"iso":"2026-10-16T02:40:54+03:00","hour_minute":"02:40","timezone":"UTC+3 (Moscow)"}
+
+HTTP 200
+
+$ curl -s http://127.0.0.1:33123/time | python3 -m json.tool
+{
+    "unix": 1792107654,
+    "iso": "2026-10-16T02:40:54+03:00",
+    "hour_minute": "02:40",
+    "timezone": "UTC+3 (Moscow)"
+}
+
+$ curl -s -D - -o /dev/null http://127.0.0.1:33123/time | head -4
+HTTP/1.1 200 OK
+content-type: application/json
+content-length: 104
+date: Thu, 15 Oct 2026 23:40:54 GMT
+
+$ curl -s -X POST -w '\nHTTP %{http_code}\n' http://127.0.0.1:33123/time   # method guard
+method not allowed
+
+HTTP 405

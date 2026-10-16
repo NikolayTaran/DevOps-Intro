@@ -1,0 +1,5 @@
+Benchmark 1: wasmtime run --env REQUEST_METHOD=GET --env PATH_INFO=/time main.wasm (50 runs)
+                mean     ±       σ          min     …     max
+  Wall Time      9.5 ms  ±     0.5 ms       8.6 ms  …    11.3 ms
+  Memory        17.4 MiB ±     0.0 MiB     17.3 MiB …    17.4 MiB
+ 
