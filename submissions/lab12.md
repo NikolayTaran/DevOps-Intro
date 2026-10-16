@@ -3,7 +3,7 @@
 **Student:** NikolayTaran (na.taranvrn@gmail.com)
 **Fork:** https://github.com/NikolayTaran/DevOps-Intro
 **Branch:** `feature/lab12` (cut from `feature/lab11`)
-**PR (course repo):** FILL-WITH-PR-URL
+**PR (course repo):** https://github.com/inno-devops-labs/DevOps-Intro/pull/1797
 **Pinned toolchain:** Spin 3.6.3 · TinyGo 0.41.0 (go1.26.9, LLVM 20.1.1) · `spin-go-sdk/v2` v2.2.1 · wasmtime 9.0.4 · hyperfine 2.0.0
 **Endpoint:** `GET /time` → `{"unix":…,"iso":…,"hour_minute":…,"timezone":"UTC+3 (Moscow)"}`
 
